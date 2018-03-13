@@ -1,0 +1,25 @@
+[package]
+authors = ["Jorge Aparicio <jorge@japaric.io>"]
+description = "JNeT: japaric's network thingies"
+license = "MIT OR Apache-2.0"
+name = "jnet"
+repository = "https://github.com/japaric/jnet"
+version = "0.1.0"
+
+[dependencies]
+arrayref = "0.3.4"
+
+[dependencies.byteorder]
+default-features = false
+version = "1.2.1"
+
+[dependencies.cast]
+default-features = false
+version = "0.2.2"
+
+[dev-dependencies]
+clap = "2.31.1"
+failure = "0.1.1"
+pretty_assertions = "0.5.0"
+rand = "0.4.2"
+url = "1.7.0"
