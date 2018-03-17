@@ -2,7 +2,7 @@
 
 > [Experiment] JNeT: japaric's network thingies
 
-## [Documentation](https://japaric.github.io/jnet/jnet)
+## [Documentation](https://japaric.github.io/jnet/jnet/index.html)
 
 ## License
 
