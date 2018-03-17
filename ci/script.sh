@@ -10,4 +10,6 @@ main() {
     xargo check --target $TARGET
 }
 
-main
+if [ $TRAVIS_BRANCH != master ]; then
+    main
+fi
