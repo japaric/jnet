@@ -1,7 +1,7 @@
 set -euxo pipefail
 
 main() {
-    if [ $TARGET = thumbv7m-none-eabi ]; then
+    if [ $TARGET != x86_64-unknown-linux-gnu ]; then
         return
     fi
 

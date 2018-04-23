@@ -614,7 +614,7 @@ where
 }
 
 /// IPv4 address
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash32, PartialEq)]
 pub struct Addr(pub [u8; 4]);
 
 impl Addr {
