@@ -3,7 +3,7 @@
 use core::fmt;
 
 /// MAC address
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash32, PartialEq)]
 pub struct Addr(pub [u8; 6]);
 
 impl Addr {

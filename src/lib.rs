@@ -100,11 +100,14 @@
 extern crate arrayref;
 extern crate byteorder;
 extern crate cast;
+#[macro_use]
+extern crate hash32_derive;
+#[cfg(test)]
+extern crate rand;
+
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-#[cfg(test)]
-extern crate rand;
 
 #[macro_use]
 mod macros;
