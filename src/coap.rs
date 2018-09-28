@@ -10,10 +10,10 @@ use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::ops::Range;
 use core::option::Option as CoreOption;
-use core::{fmt, slice, str};
+use core::{fmt, str};
 
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{isize, usize, u16, u8};
+use cast::{usize, u16, u8};
 
 use traits::Resize;
 
@@ -105,7 +105,8 @@ where
 {
     buffer: BUFFER,
     // Position of the `PAYLOAD_MARKER`. Cached to avoid traversing the options (O(N) runtime) when
-    // the payload is requested
+    // the payload is requested. An index outside the buffer indicates that the message has no
+    // payload.
     payload_marker: u16,
     /// Highest option number stored in the Options field
     number: u16,
@@ -143,7 +144,10 @@ where
             let mut number = 0;
 
             loop {
-                let head = *bytes.as_ref().get(usize(cursor)).ok_or(())?;
+                let head = *match bytes.as_ref().get(usize(cursor)) {
+                    Some(b) => { b },
+                    None => { break }
+                };
 
                 if head == PAYLOAD_MARKER {
                     // end of options
@@ -250,14 +254,17 @@ where
     pub fn options(&self) -> Options {
         Options {
             number: 0,
-            ptr: unsafe { self.as_ref().as_ptr().offset(isize(self.options_start())) },
-            _slice: PhantomData,
+            ptr: &self.as_ref()[usize(self.options_start())..usize(self.payload_marker)]
         }
     }
 
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_ref()[usize(self.payload_marker + 1)..]
+        if usize(self.payload_marker) >= self.as_ref().len() {
+            &[]
+        } else {
+            &self.as_ref()[usize(self.payload_marker + 1)..]
+        }
     }
 
     /// Returns the length (header + data) of the CoAP message
@@ -282,6 +289,10 @@ where
 
     fn payload_len(&self) -> u16 {
         let payload_marker = usize(self.payload_marker);
+
+        if self.as_ref().len() <= payload_marker {
+            return 0;
+        }
 
         // sanity check
         debug_assert_eq!(self.as_ref()[payload_marker], PAYLOAD_MARKER);
@@ -593,23 +604,30 @@ impl<'a> Option<'a> {
 pub struct Options<'a> {
     /// Number of the previous option
     number: u16,
-    ptr: *const u8,
-    _slice: PhantomData<&'a [u8]>,
+    ptr: &'a [u8],
 }
 
 // Helper
-struct PtrReader<'a>(&'a mut *const u8);
+struct PtrReader<'a>(&'a [u8]);
 
 impl<'a> PtrReader<'a> {
-    unsafe fn read_u8(&mut self) -> u8 {
-        let byte = **self.0;
-        *self.0 = self.0.offset(1);
+    fn try_read_u8(&mut self) -> ::core::option::Option<u8> {
+        if self.0.len() > 0 {
+            Some(self.read_u8())
+        } else {
+            None
+        }
+    }
+
+    fn read_u8(&mut self) -> u8 {
+        let byte = self.0[0];
+        self.0 = &self.0[1..];
         byte
     }
 
-    unsafe fn read_u16(&mut self) -> u16 {
-        let halfword = NE::read_u16(slice::from_raw_parts(*self.0, 2));
-        *self.0 = self.0.offset(2);
+    fn read_u16(&mut self) -> u16 {
+        let halfword = NE::read_u16(&self.0[..2]);
+        self.0 = &self.0[2..];
         halfword
     }
 }
@@ -618,9 +636,9 @@ impl<'a> Iterator for Options<'a> {
     type Item = Option<'a>;
 
     fn next(&mut self) -> CoreOption<Option<'a>> {
-        let mut ptr = PtrReader(&mut self.ptr);
+        let mut ptr = PtrReader(self.ptr);
 
-        let head = unsafe { ptr.read_u8() };
+        let head = ptr.try_read_u8()?;
         if head == PAYLOAD_MARKER {
             None
         } else {
@@ -632,28 +650,28 @@ impl<'a> Iterator for Options<'a> {
             debug_assert!(len4 != RESERVED);
 
             self.number += if delta4 == DELTA8 {
-                u16(unsafe { ptr.read_u8() }) + OFFSET8
+                u16(ptr.read_u8()) + OFFSET8
             } else if delta4 == DELTA16 {
-                unsafe { ptr.read_u16() + OFFSET16 }
+                ptr.read_u16() + OFFSET16
             } else {
                 u16(delta4)
             };
 
             let len = if len4 == LENGTH8 {
-                u16(unsafe { ptr.read_u8() }) + OFFSET8
+                u16(ptr.read_u8()) + OFFSET8
             } else if len4 == LENGTH16 {
-                unsafe { ptr.read_u16() + OFFSET16 }
+                ptr.read_u16() + OFFSET16
             } else {
                 u16(len4)
             };
 
             // move pointer by `len` for the next iteration
-            let value_ptr = *ptr.0;
-            *ptr.0 = unsafe { ptr.0.offset(isize(len)) };
+            let value = &ptr.0[..usize(len)];
+            self.ptr = &ptr.0[usize(len)..];
 
             Some(Option {
                 number: self.number,
-                value: unsafe { slice::from_raw_parts(value_ptr, usize(len)) },
+                value: value,
             })
         }
     }
