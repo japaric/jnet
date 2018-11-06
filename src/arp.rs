@@ -13,6 +13,7 @@ use core::ops::{Range, RangeFrom};
 
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{usize, u16};
+use as_slice::{AsSlice, AsMutSlice};
 
 use {Resize, Unknown};
 use {ether, mac, ipv4};
@@ -43,7 +44,7 @@ pub enum Ipv4 {}
 /// ARP packet
 pub struct Packet<BUFFER, HTYPE = Ethernet, PTYPE = Ipv4>
 where
-    BUFFER: AsRef<[u8]>,
+    BUFFER: AsSlice<Element=u8>,
     HTYPE: 'static,
     PTYPE: 'static,
 {
@@ -55,7 +56,7 @@ where
 /* Ethernet - Ipv4 */
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsRef<[u8]> + AsMut<[u8]> + Resize,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
 {
     /* Constructors */
     /// Transforms the given buffer into an ARP packet
@@ -69,7 +70,7 @@ where
     /// - OPER = Request
     pub fn new(buffer: B) -> Self {
         let len = HEADER_SIZE + 20;
-        assert!(buffer.as_ref().len() >= usize(len));
+        assert!(buffer.as_slice().len() >= usize(len));
 
         let mut packet: Packet<B, Unknown, Unknown> = Packet {
             buffer,
@@ -80,8 +81,8 @@ where
         packet.buffer.truncate(len);
         packet.set_htype(HardwareType::Ethernet);
         packet.set_ptype(ether::Type::Ipv4);
-        packet.buffer.as_mut()[HLEN] = 6;
-        packet.buffer.as_mut()[PLEN] = 4;
+        packet.buffer.as_mut_slice()[HLEN] = 6;
+        packet.buffer.as_mut_slice()[PLEN] = 4;
         packet.set_oper(Operation::Request);
 
         Packet {
@@ -94,27 +95,27 @@ where
 
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /* Getters */
     /// Returns the SHA (Sender Hardware Address) field of the payload
     pub fn get_sha(&self) -> mac::Addr {
-        mac::Addr(*array_ref!(self.as_ref(), SHA.start, SHA.end - SHA.start))
+        mac::Addr(*array_ref!(self.as_slice(), SHA.start, SHA.end - SHA.start))
     }
 
     /// Returns the SPA (Sender Protocol Address) field of the payload
     pub fn get_spa(&self) -> ipv4::Addr {
-        ipv4::Addr(*array_ref!(self.as_ref(), SPA.start, SPA.end - SPA.start))
+        ipv4::Addr(*array_ref!(self.as_slice(), SPA.start, SPA.end - SPA.start))
     }
 
     /// Returns the THA (Target Hardware Address) field of the payload
     pub fn get_tha(&self) -> mac::Addr {
-        mac::Addr(*array_ref!(self.as_ref(), THA.start, THA.end - THA.start))
+        mac::Addr(*array_ref!(self.as_slice(), THA.start, THA.end - THA.start))
     }
 
     /// Returns the TPA (Target Protocol Address) field of the payload
     pub fn get_tpa(&self) -> ipv4::Addr {
-        ipv4::Addr(*array_ref!(self.as_ref(), TPA.start, TPA.end - TPA.start))
+        ipv4::Addr(*array_ref!(self.as_slice(), TPA.start, TPA.end - TPA.start))
     }
 
     /// Is this an ARP probe?
@@ -125,27 +126,27 @@ where
 
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the SHA (Sender Hardware Address) field of the payload
     pub fn set_sha(&mut self, sha: mac::Addr) {
-        self.as_mut()[SHA].copy_from_slice(&sha.0);
+        self.as_mut_slice()[SHA].copy_from_slice(&sha.0);
     }
 
     /// Sets the SPA (Sender Protocol Address) field of the payload
     pub fn set_spa(&mut self, spa: ipv4::Addr) {
-        self.as_mut()[SPA].copy_from_slice(&spa.0);
+        self.as_mut_slice()[SPA].copy_from_slice(&spa.0);
     }
 
     /// Sets the THA (Target Hardware Address) field of the payload
     pub fn set_tha(&mut self, tha: mac::Addr) {
-        self.as_mut()[THA].copy_from_slice(&tha.0);
+        self.as_mut_slice()[THA].copy_from_slice(&tha.0);
     }
 
     /// Sets the TPA (Target Protocol Address) field of the payload
     pub fn set_tpa(&mut self, tpa: ipv4::Addr) {
-        self.as_mut()[TPA].copy_from_slice(&tpa.0);
+        self.as_mut_slice()[TPA].copy_from_slice(&tpa.0);
     }
 
     /* Miscellaneous */
@@ -186,7 +187,7 @@ where
 /* Unknown - Unknown */
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /* Getters */
     // htype: covered by the generic impl
@@ -235,11 +236,11 @@ where
 
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsRef<[u8]> + Resize,
+    B: AsSlice<Element=u8> + Resize,
 {
     /// Parses bytes into an ARP packet
     pub fn parse(bytes: B) -> Result<Self, B> {
-        if bytes.as_ref().len() < usize(HEADER_SIZE) {
+        if bytes.as_slice().len() < usize(HEADER_SIZE) {
             // too small; header doesn't fit
             return Err(bytes);
         }
@@ -266,23 +267,23 @@ where
 
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the HTYPE (Hardware TYPE) field of the header
     pub fn set_htype(&mut self, htype: HardwareType) {
-        NE::write_u16(&mut self.as_mut()[HTYPE], htype.into());
+        NE::write_u16(&mut self.as_mut_slice()[HTYPE], htype.into());
     }
 
     /// Sets the PTYPE (Protocol TYPE) field of the header
     pub fn set_ptype(&mut self, ptype: ether::Type) {
-        NE::write_u16(&mut self.as_mut()[PTYPE], ptype.into());
+        NE::write_u16(&mut self.as_mut_slice()[PTYPE], ptype.into());
     }
 }
 
 impl<B> TryFrom<Packet<B, Unknown, Unknown>> for Packet<B, Ethernet, Ipv4>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     type Error = Packet<B, Unknown, Unknown>;
 
@@ -304,7 +305,7 @@ where
 /* HTYPE - PTYPE */
 impl<B, H, P> Packet<B, H, P>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /* Getters */
     /// Returns the HTYPE (Hardware TYPE) field of the header
@@ -312,7 +313,7 @@ where
         if typeid!(H == Ethernet) {
             HardwareType::Ethernet
         } else {
-            NE::read_u16(&self.as_ref()[HTYPE]).into()
+            NE::read_u16(&self.as_slice()[HTYPE]).into()
         }
     }
 
@@ -321,7 +322,7 @@ where
         if typeid!(P == Ipv4) {
             ether::Type::Ipv4
         } else {
-            NE::read_u16(&self.as_ref()[PTYPE]).into()
+            NE::read_u16(&self.as_slice()[PTYPE]).into()
         }
     }
 
@@ -330,7 +331,7 @@ where
         if typeid!(H == Ethernet) {
             6
         } else {
-            self.as_ref()[HLEN]
+            self.as_slice()[HLEN]
         }
     }
 
@@ -339,18 +340,18 @@ where
         if typeid!(P == Ipv4) {
             4
         } else {
-            self.as_ref()[PLEN]
+            self.as_slice()[PLEN]
         }
     }
 
     /// Returns the OPER (OPERation) field of the header
     pub fn get_oper(&self) -> Operation {
-        NE::read_u16(&self.as_ref()[OPER]).into()
+        NE::read_u16(&self.as_slice()[OPER]).into()
     }
 
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_ref()[PAYLOAD]
+        &self.as_slice()[PAYLOAD]
     }
 
     /// Returns the length (header + data) of this packet
@@ -365,35 +366,35 @@ where
     }
 
     /* Private */
-    fn as_ref(&self) -> &[u8] {
-        self.buffer.as_ref()
+    fn as_slice(&self) -> &[u8] {
+        self.buffer.as_slice()
     }
 }
 
 impl<B, H, P> Packet<B, H, P>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the OPER (OPERation) field of the header
     pub fn set_oper(&mut self, oper: Operation) {
-        NE::write_u16(&mut self.as_mut()[OPER], oper.into())
+        NE::write_u16(&mut self.as_mut_slice()[OPER], oper.into())
     }
 
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut()[PAYLOAD]
+        &mut self.as_mut_slice()[PAYLOAD]
     }
 
     /* Private */
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.buffer.as_mut()
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.buffer.as_mut_slice()
     }
 }
 
 impl<B, H, P> Clone for Packet<B, H, P>
 where
-    B: Clone + AsRef<[u8]>,
+    B: Clone + AsSlice<Element=u8>,
 {
     fn clone(&self) -> Self {
         Packet {
@@ -406,13 +407,13 @@ where
 
 impl<B, H, P> Copy for Packet<B, H, P>
 where
-    B: Copy + AsRef<[u8]>,
+    B: Copy + AsSlice<Element=u8>,
 {
 }
 
 impl<B> fmt::Debug for Packet<B, Ethernet, Ipv4>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("arp::Packet")
@@ -427,7 +428,7 @@ where
 
 impl<B> fmt::Debug for Packet<B, Unknown, Unknown>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("arp::Packet")

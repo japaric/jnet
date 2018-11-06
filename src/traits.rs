@@ -1,34 +1,4 @@
-use core::marker::Unsize;
-
 use cast::usize;
-
-pub trait Chunk {
-    fn as_ref(&self) -> &[u8];
-    fn as_mut(&mut self) -> &mut [u8];
-}
-
-impl<'b, B> Chunk for &'b mut B
-where
-    B: Unsize<[u8]>,
-{
-    fn as_ref(&self) -> &[u8] {
-        *self
-    }
-
-    fn as_mut(&mut self) -> &mut [u8] {
-        *self
-    }
-}
-
-impl<'b> Chunk for &'b mut [u8] {
-    fn as_ref(&self) -> &[u8] {
-        *self
-    }
-
-    fn as_mut(&mut self) -> &mut [u8] {
-        *self
-    }
-}
 
 // TODO impl Chunk for Box<[u8]>
 
