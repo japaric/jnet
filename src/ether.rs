@@ -5,6 +5,8 @@ use core::ops::{Range, RangeFrom};
 
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{usize, u16};
+use as_slice::{AsSlice, AsMutSlice};
+
 
 use {arp, mac, ipv4};
 use {Invalid, Resize};
@@ -33,26 +35,26 @@ pub const HEADER_SIZE: u16 = TYPE.end as u16;
 #[derive(Clone, Copy)]
 pub struct Frame<BUFFER>
 where
-    BUFFER: AsRef<[u8]>,
+    BUFFER: AsSlice<Element=u8>,
 {
     buffer: BUFFER,
 }
 
 impl<B> Frame<B>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /* Constructors */
     /// Creates a new Ethernet frame from the given buffer
     pub fn new(buffer: B) -> Self {
-        assert!(buffer.as_ref().len() >= usize(HEADER_SIZE));
+        assert!(buffer.as_slice().len() >= usize(HEADER_SIZE));
 
         Frame { buffer }
     }
 
     /// Parses bytes into an Ethernet frame
     pub fn parse(bytes: B) -> Result<Self, B> {
-        if bytes.as_ref().len() < usize(HEADER_SIZE) {
+        if bytes.as_slice().len() < usize(HEADER_SIZE) {
             Err(bytes)
         } else {
             Ok(Frame { buffer: bytes })
@@ -63,7 +65,7 @@ where
     /// Returns the Destination field of the header
     pub fn get_destination(&self) -> mac::Addr {
         mac::Addr(*array_ref!(
-            self.as_ref(),
+            self.as_slice(),
             DESTINATION.start,
             DESTINATION.end - DESTINATION.start
         ))
@@ -72,7 +74,7 @@ where
     /// Returns the Source field of the header
     pub fn get_source(&self) -> mac::Addr {
         mac::Addr(*array_ref!(
-            self.as_ref(),
+            self.as_slice(),
             SOURCE.start,
             SOURCE.end - SOURCE.start
         ))
@@ -80,18 +82,18 @@ where
 
     /// Returns the Type field of the header
     pub fn get_type(&self) -> Type {
-        NE::read_u16(&self.as_ref()[TYPE]).into()
+        NE::read_u16(&self.as_slice()[TYPE]).into()
     }
 
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_ref()[PAYLOAD]
+        &self.as_slice()[PAYLOAD]
     }
 
     /* Miscellaneous */
     /// Returns the byte representation of this frame
     pub fn as_bytes(&self) -> &[u8] {
-        self.as_ref()
+        self.as_slice()
     }
 
     /// Frees the underlying buffer
@@ -105,46 +107,46 @@ where
     }
 
     /* Private */
-    fn as_ref(&self) -> &[u8] {
-        self.buffer.as_ref()
+    fn as_slice(&self) -> &[u8] {
+        self.buffer.as_slice()
     }
 }
 
 impl<B> Frame<B>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the destination field of the header
     pub fn set_destination(&mut self, addr: mac::Addr) {
-        self.as_mut()[DESTINATION].copy_from_slice(&addr.0)
+        self.as_mut_slice()[DESTINATION].copy_from_slice(&addr.0)
     }
 
     /// Sets the source field of the header
     pub fn set_source(&mut self, addr: mac::Addr) {
-        self.as_mut()[SOURCE].copy_from_slice(&addr.0)
+        self.as_mut_slice()[SOURCE].copy_from_slice(&addr.0)
     }
 
     /// Sets the type field of the header
     pub fn set_type(&mut self, type_: Type) {
-        NE::write_u16(&mut self.as_mut()[TYPE], type_.into())
+        NE::write_u16(&mut self.as_mut_slice()[TYPE], type_.into())
     }
 
     /* Miscellaneous */
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut()[PAYLOAD]
+        &mut self.as_mut_slice()[PAYLOAD]
     }
 
     /* Private */
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.buffer.as_mut()
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.buffer.as_mut_slice()
     }
 }
 
 impl<B> Frame<B>
 where
-    B: AsRef<[u8]> + Resize,
+    B: AsSlice<Element=u8> + Resize,
 {
     /// Truncates the *payload* of this frame to the specified length
     pub fn truncate(&mut self, len: u16) {
@@ -161,7 +163,7 @@ where
 
 impl<B> Frame<B>
 where
-    B: AsRef<[u8]> + AsMut<[u8]> + Resize,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
 {
     /// Fills the payload with an ARP packet
     ///
@@ -205,7 +207,7 @@ where
 /// NOTE excludes the payload
 impl<B> fmt::Debug for Frame<B>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ether::Frame")

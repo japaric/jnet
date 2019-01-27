@@ -93,7 +93,6 @@
 #![deny(missing_docs)]
 // #![deny(warnings)]
 #![feature(try_from)]
-#![feature(unsize)]
 #![no_std]
 
 #[macro_use]
@@ -108,6 +107,7 @@ extern crate rand;
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
+extern crate as_slice;
 
 #[macro_use]
 mod macros;

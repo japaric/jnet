@@ -5,6 +5,7 @@ use core::ops::{Range, RangeFrom};
 
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{usize, u16};
+use as_slice::{AsSlice, AsMutSlice};
 
 use {coap, Resize};
 
@@ -21,19 +22,19 @@ pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
 /// UDP packet
 pub struct Packet<BUFFER>
 where
-    BUFFER: AsRef<[u8]>,
+    BUFFER: AsSlice<Element=u8>,
 {
     buffer: BUFFER,
 }
 
 impl<B> Packet<B>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /* Constructors */
     /// Parses the bytes as an UDP packet
     pub fn parse(bytes: B) -> Result<Self, B> {
-        let nbytes = bytes.as_ref().len();
+        let nbytes = bytes.as_slice().len();
         if nbytes < usize(HEADER_SIZE) {
             return Err(bytes);
         }
@@ -51,21 +52,21 @@ where
     /* Getters */
     /// Returns the Source (port) field of the header
     pub fn get_source(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[SOURCE])
+        NE::read_u16(&self.as_slice()[SOURCE])
     }
 
     /// Returns the Destination (port) field of the header
     pub fn get_destination(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[DESTINATION])
+        NE::read_u16(&self.as_slice()[DESTINATION])
     }
 
     /// Returns the Length field of the header
     pub fn get_length(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[LENGTH])
+        NE::read_u16(&self.as_slice()[LENGTH])
     }
 
     fn get_checksum(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[CHECKSUM])
+        NE::read_u16(&self.as_slice()[CHECKSUM])
     }
 
     /// Returns the length (header + data) of this packet
@@ -76,17 +77,17 @@ where
     /* Miscellaneous */
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_ref()[PAYLOAD]
+        &self.as_slice()[PAYLOAD]
     }
 
     /// Returns the byte representation of this UDP packet
     pub fn as_bytes(&self) -> &[u8] {
-        self.as_ref()
+        self.as_slice()
     }
 
     /* Private */
-    fn as_ref(&self) -> &[u8] {
-        self.buffer.as_ref()
+    fn as_slice(&self) -> &[u8] {
+        self.buffer.as_slice()
     }
 
     fn payload_len(&self) -> u16 {
@@ -96,21 +97,21 @@ where
 
 impl<B> Packet<B>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the Source (port) field of the header
     pub fn set_source(&mut self, port: u16) {
-        NE::write_u16(&mut self.as_mut()[SOURCE], port)
+        NE::write_u16(&mut self.as_mut_slice()[SOURCE], port)
     }
 
     /// Sets the Destination (port) field of the header
     pub fn set_destination(&mut self, port: u16) {
-        NE::write_u16(&mut self.as_mut()[DESTINATION], port)
+        NE::write_u16(&mut self.as_mut_slice()[DESTINATION], port)
     }
 
     unsafe fn set_length(&mut self, len: u16) {
-        NE::write_u16(&mut self.as_mut()[LENGTH], len)
+        NE::write_u16(&mut self.as_mut_slice()[LENGTH], len)
     }
 
     /// Zeroes the Checksum field of the header
@@ -120,24 +121,24 @@ where
 
     /// Sets the Destination (port) field of the header
     fn set_checksum(&mut self, checksum: u16) {
-        NE::write_u16(&mut self.as_mut()[CHECKSUM], checksum)
+        NE::write_u16(&mut self.as_mut_slice()[CHECKSUM], checksum)
     }
 
     /* Miscellaneous */
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut()[PAYLOAD]
+        &mut self.as_mut_slice()[PAYLOAD]
     }
 
     /* Private */
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.buffer.as_mut()
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.buffer.as_mut_slice()
     }
 }
 
 impl<B> Packet<B>
 where
-    B: AsRef<[u8]> + AsMut<[u8]> + Resize,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
 {
     /* Constructors */
     /// Transforms the given buffer into an UDP packet
@@ -148,9 +149,9 @@ where
     ///
     /// This constructor panics if the given `buffer` is not large enough to contain the UDP header.
     pub fn new(mut buffer: B) -> Self {
-        assert!(buffer.as_ref().len() >= usize(HEADER_SIZE));
+        assert!(buffer.as_slice().len() >= usize(HEADER_SIZE));
 
-        let len = u16(buffer.as_ref().len()).unwrap_or(u16::MAX);
+        let len = u16(buffer.as_slice().len()).unwrap_or(u16::MAX);
         buffer.truncate(len);
         let mut packet = Packet { buffer };
 
@@ -197,7 +198,7 @@ where
 /// NOTE excludes the payload
 impl<B> fmt::Debug for Packet<B>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("udp::Packet")

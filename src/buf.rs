@@ -1,8 +1,9 @@
 use core::u16;
 
 use cast::{usize, u16};
+use as_slice::{AsSlice, AsMutSlice};
 
-use traits::{Chunk, Resize};
+use traits::Resize;
 
 /// Buffer that owns a (statically sized) chunk of memory and provides a slice view into it
 ///
@@ -69,7 +70,7 @@ use traits::{Chunk, Resize};
 /// stored in the type system.
 pub struct Buffer<CHUNK>
 where
-    CHUNK: Chunk,
+    CHUNK: AsSlice<Element=u8>,
 {
     chunk: CHUNK,
     offset: u16,
@@ -78,14 +79,14 @@ where
 
 impl<C> Buffer<C>
 where
-    C: Chunk,
+    C: AsSlice<Element=u8>,
 {
     /// Creates a new buffer from the given chunk of memory
     ///
     /// The `Chunk` trait is currently implemented for `&'a mut [u8]` and `&'a mut [u8; N]` but the
     /// plan is to also implement it for `Box<[u8]>` and `Box<[u8; N]`.
     pub fn new(chunk: C) -> Self {
-        let len = u16(chunk.as_ref().len()).unwrap_or(u16::MAX);
+        let len = u16(chunk.as_slice().len()).unwrap_or(u16::MAX);
         Buffer {
             chunk,
             offset: 0,
@@ -96,7 +97,7 @@ where
     /// Resets the slice view to span the full length of the `Chunk`
     pub fn reset(&mut self) {
         self.offset = 0;
-        self.len = self.chunk.as_ref().len() as u16;
+        self.len = self.chunk.as_slice().len() as u16;
     }
 
     /// Truncates the buffer to the specified length
@@ -110,31 +111,32 @@ where
     }
 }
 
-impl<C> AsRef<[u8]> for Buffer<C>
+impl<C> AsSlice for Buffer<C>
 where
-    C: Chunk,
+    C: AsSlice<Element=u8>,
 {
-    fn as_ref(&self) -> &[u8] {
+    type Element = u8;
+    fn as_slice(&self) -> &[u8] {
         let start = usize(self.offset);
         let end = usize(self.offset + self.len);
-        &self.chunk.as_ref()[start..end]
+        &self.chunk.as_slice()[start..end]
     }
 }
 
-impl<C> AsMut<[u8]> for Buffer<C>
+impl<C> AsMutSlice for Buffer<C>
 where
-    C: Chunk,
+    C: AsMutSlice<Element=u8>,
 {
-    fn as_mut(&mut self) -> &mut [u8] {
+    fn as_mut_slice(&mut self) -> &mut [u8] {
         let start = usize(self.offset);
         let end = usize(self.offset + self.len);
-        &mut self.chunk.as_mut()[start..end]
+        &mut self.chunk.as_mut_slice()[start..end]
     }
 }
 
 impl<C> Resize for Buffer<C>
 where
-    C: Chunk,
+    C: AsSlice<Element=u8>,
 {
     fn slice_from(&mut self, offset: u16) {
         assert!(offset <= self.len);

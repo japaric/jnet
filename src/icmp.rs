@@ -13,6 +13,7 @@ use core::ops::{Range, RangeFrom};
 
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::usize;
+use as_slice::{AsSlice, AsMutSlice};
 
 use fmt::Hex;
 use ipv4;
@@ -32,7 +33,7 @@ pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
 /// ICMP packet
 pub struct Packet<BUFFER, TYPE, CHECKSUM>
 where
-    BUFFER: AsRef<[u8]>,
+    BUFFER: AsSlice<Element=u8>,
     TYPE: 'static,
 {
     buffer: BUFFER,
@@ -56,12 +57,12 @@ unsafe impl Echo for EchoRequest {}
 /* EchoRequest */
 impl<B> Packet<B, EchoRequest, Invalid>
 where
-    B: AsRef<[u8]> + AsMut<[u8]> + Resize,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
 {
     /* Constructors */
     /// Transforms the input buffer into a Echo Request ICMP packet
     pub fn new(buffer: B) -> Self {
-        assert!(buffer.as_ref().len() >= usize(HEADER_SIZE));
+        assert!(buffer.as_slice().len() >= usize(HEADER_SIZE));
 
         let mut packet: Packet<B, Unknown, Invalid> = unsafe { Packet::unchecked(buffer) };
 
@@ -75,47 +76,47 @@ where
 /* EchoReply OR EchoRequest */
 impl<B, E, C> Packet<B, E, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
     E: Echo,
 {
     /* Getters */
     /// Returns the Identifier field of the header
     pub fn get_identifier(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[IDENT])
+        NE::read_u16(&self.as_slice()[IDENT])
     }
 
     /// Returns the Identifier field of the header
     pub fn get_sequence_number(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[SEQ_NO])
+        NE::read_u16(&self.as_slice()[SEQ_NO])
     }
 }
 
 impl<B, E> Packet<B, E, Invalid>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
     E: Echo,
 {
     /* Setters */
     /// Returns the Identifier field of the header
     pub fn set_identifier(&mut self, ident: u16) {
-        NE::write_u16(&mut self.as_mut()[IDENT], ident)
+        NE::write_u16(&mut self.as_mut_slice()[IDENT], ident)
     }
 
     /// Returns the Identifier field of the header
     pub fn set_sequence_number(&mut self, seq_no: u16) {
-        NE::write_u16(&mut self.as_mut()[SEQ_NO], seq_no)
+        NE::write_u16(&mut self.as_mut_slice()[SEQ_NO], seq_no)
     }
 }
 
 /* Unknown */
 impl<B> Packet<B, Unknown, Valid>
 where
-    B: AsRef<[u8]> + Resize,
+    B: AsSlice<Element=u8> + Resize,
 {
     /* Constructors */
     /// Parses the input bytes into a
     pub fn parse(bytes: B) -> Result<Self, B> {
-        if bytes.as_ref().len() < usize(HEADER_SIZE) {
+        if bytes.as_slice().len() < usize(HEADER_SIZE) {
             return Err(bytes);
         }
 
@@ -131,23 +132,23 @@ where
 
 impl<B> Packet<B, Unknown, Invalid>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the Type field of the header
     pub fn set_type(&mut self, type_: Type) {
-        self.as_mut()[TYPE] = type_.into();
+        self.as_mut_slice()[TYPE] = type_.into();
     }
 
     /// Sets the Code field of the header
     pub fn set_code(&mut self, code: u8) {
-        self.as_mut()[CODE] = code;
+        self.as_mut_slice()[CODE] = code;
     }
 }
 
 impl<B> Packet<B, Unknown, Valid>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Setters */
     /// Sets the Type field of the header
@@ -167,7 +168,7 @@ where
 
 impl<B, C> Packet<B, Unknown, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /// Downcasts this packet with unknown type into a specific type
     pub fn downcast<TYPE>(self) -> Result<Packet<B, TYPE, C>, Self>
@@ -180,7 +181,7 @@ where
 
 impl<B, C> From<Packet<B, EchoRequest, C>> for Packet<B, EchoReply, Valid>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     fn from(p: Packet<B, EchoRequest, C>) -> Self {
         let mut p: Packet<B, Unknown, Invalid> = unsafe { Packet::unchecked(p.buffer) };
@@ -192,7 +193,7 @@ where
 
 impl<B, C> TryFrom<Packet<B, Unknown, C>> for Packet<B, EchoReply, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     type Error = Packet<B, Unknown, C>;
 
@@ -207,7 +208,7 @@ where
 
 impl<B, C> TryFrom<Packet<B, Unknown, C>> for Packet<B, EchoRequest, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     type Error = Packet<B, Unknown, C>;
 
@@ -223,7 +224,7 @@ where
 /* TYPE */
 impl<B, T, C> Packet<B, T, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     /* Constructors */
     unsafe fn unchecked(buffer: B) -> Self {
@@ -242,7 +243,7 @@ where
         } else if typeid!(T == EchoRequest) {
             Type::EchoRequest
         } else {
-            self.as_ref()[TYPE].into()
+            self.as_slice()[TYPE].into()
         }
     }
 
@@ -253,58 +254,58 @@ where
         } else if typeid!(T == EchoRequest) {
             0
         } else {
-            self.as_ref()[CODE]
+            self.as_slice()[CODE]
         }
     }
 
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_ref()[PAYLOAD]
+        &self.as_slice()[PAYLOAD]
     }
 
     /// Returns the length (header + data) of this packet
     pub fn len(&self) -> u16 {
-        self.as_ref().len() as u16
+        self.as_slice().len() as u16
     }
 
     /// Returns the byte representation of this packet
     pub fn as_bytes(&self) -> &[u8] {
-        self.as_ref()
+        self.as_slice()
     }
 
     /* Private */
-    fn as_ref(&self) -> &[u8] {
-        self.buffer.as_ref()
+    fn as_slice(&self) -> &[u8] {
+        self.buffer.as_slice()
     }
 
     fn get_checksum(&self) -> u16 {
-        NE::read_u16(&self.as_ref()[CHECKSUM])
+        NE::read_u16(&self.as_slice()[CHECKSUM])
     }
 }
 
 impl<B, T, C> Packet<B, T, C>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /* Private */
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.buffer.as_mut()
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.buffer.as_mut_slice()
     }
 }
 
 impl<B, T> Packet<B, T, Invalid>
 where
-    B: AsRef<[u8]> + AsMut<[u8]>,
+    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
 {
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut()[PAYLOAD]
+        &mut self.as_mut_slice()[PAYLOAD]
     }
 
     /// Updates the Checksum field of the header
     pub fn update_checksum(mut self) -> Packet<B, T, Valid> {
         let cksum = ipv4::compute_checksum(&self.as_bytes(), CHECKSUM.start);
-        NE::write_u16(&mut self.as_mut()[CHECKSUM], cksum);
+        NE::write_u16(&mut self.as_mut_slice()[CHECKSUM], cksum);
 
         unsafe { Packet::unchecked(self.buffer) }
     }
@@ -312,7 +313,7 @@ where
 
 impl<B, T> Packet<B, T, Valid>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     fn invalidate_header_checksum(self) -> Packet<B, T, Invalid> {
         unsafe { Packet::unchecked(self.buffer) }
@@ -321,7 +322,7 @@ where
 
 impl<B, T, C> Clone for Packet<B, T, C>
 where
-    B: AsRef<[u8]> + Clone,
+    B: AsSlice<Element=u8> + Clone,
 {
     fn clone(&self) -> Self {
         Packet {
@@ -335,7 +336,7 @@ where
 /// NOTE excludes the payload
 impl<B, E, C> fmt::Debug for Packet<B, E, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
     E: Echo,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -352,7 +353,7 @@ where
 
 impl<B, C> fmt::Debug for Packet<B, Unknown, C>
 where
-    B: AsRef<[u8]>,
+    B: AsSlice<Element=u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("icmp::Packet")
