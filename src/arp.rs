@@ -15,6 +15,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
+use traits::UncheckedIndex;
 use {ether, ipv4, mac};
 use {Resize, Unknown};
 
@@ -200,7 +201,7 @@ where
     pub fn get_sha(&self) -> &[u8] {
         let end = usize(self.get_hlen());
 
-        &self.payload()[..end]
+        unsafe { self.payload().rt(..end) }
     }
 
     /// Returns the SPA (Sender Protocol Address) field of the payload
@@ -208,7 +209,7 @@ where
         let start = usize(self.get_hlen());
         let end = start + usize(self.get_plen());
 
-        &self.payload()[start..end]
+        unsafe { self.payload().r(start..end) }
     }
 
     /// Returns the THA (Target Hardware Address) field of the payload
@@ -216,7 +217,7 @@ where
         let start = usize(self.get_hlen()) + usize(self.get_plen());
         let end = start + usize(self.get_hlen());
 
-        &self.payload()[start..end]
+        unsafe { self.payload().r(start..end) }
     }
 
     /// Returns the TPA (Target Protocol Address) field of the payload
@@ -224,7 +225,7 @@ where
         let start = 2 * usize(self.get_hlen()) + usize(self.get_plen());
         let end = start + usize(self.get_plen());
 
-        &self.payload()[start..end]
+        unsafe { self.payload().r(start..end) }
     }
 
     /* Miscellaneous */
