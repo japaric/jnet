@@ -1,7 +1,5 @@
 //! Very simple CoAP client
 
-#![feature(termination_trait)]
-
 extern crate clap;
 #[macro_use]
 extern crate failure;
@@ -14,8 +12,8 @@ use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 use std::str;
 use std::time::{Duration, Instant};
 
-use failure::{Error, ResultExt};
 use clap::{App, Arg};
+use failure::{Error, ResultExt};
 use jnet::{coap, Buffer};
 use rand::Rng;
 use url::{Host, Url};
