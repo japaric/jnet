@@ -1,7 +1,9 @@
 set -euxo pipefail
 
 main() {
-    rustup target add $TARGET
+    if [ $TARGET != rustfmt ]; then
+        rustup target add $TARGET
+    fi
 }
 
 main
