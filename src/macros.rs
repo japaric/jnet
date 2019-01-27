@@ -91,22 +91,22 @@ macro_rules! full_range {
 macro_rules! get {
     ($byte:expr, $field:ident) => {
         ($byte >> self::$field::OFFSET) & self::$field::MASK
-    }
+    };
 }
 
 /// Writes to the bitfield of a byte / word
 macro_rules! set {
-    ($byte:expr, $field:ident, $value:expr) => ({
+    ($byte:expr, $field:ident, $value:expr) => {{
         let byte = &mut $byte;
 
         *byte &= !(self::$field::MASK << self::$field::OFFSET);
         *byte |= ($value & self::$field::MASK) << self::$field::OFFSET;
-    })
+    }};
 }
 
 /// Poor man's specialization
 macro_rules! typeid {
     ($type_parameter:ident == $concrete_type:ident) => {
         ::core::any::TypeId::of::<$type_parameter>() == ::core::any::TypeId::of::<$concrete_type>()
-    }
+    };
 }

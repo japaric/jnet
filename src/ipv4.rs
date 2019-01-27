@@ -10,14 +10,14 @@ use core::marker::PhantomData;
 use core::ops::Range;
 use core::{fmt, u16};
 
+use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{usize, u16, u32};
-use as_slice::{AsSlice, AsMutSlice};
+use cast::{u16, u32, usize};
 
 use fmt::Hex;
 use traits::{Resize, UxxExt};
-use {Invalid, Valid};
 use {icmp, udp};
+use {Invalid, Valid};
 
 /* Packet structure */
 const VERSION_IHL: usize = 0;
@@ -83,7 +83,7 @@ pub const MIN_HEADER_SIZE: u16 = DESTINATION.end as u16;
 /// IPv4 packet
 pub struct Packet<BUFFER, CHECKSUM>
 where
-    BUFFER: AsSlice<Element=u8>,
+    BUFFER: AsSlice<Element = u8>,
 {
     buffer: BUFFER,
     _checksum: PhantomData<CHECKSUM>,
@@ -91,7 +91,7 @@ where
 
 impl<B> Packet<B, Valid>
 where
-    B: AsSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + Resize,
 {
     /* Constructors */
     /// Parses bytes into an IPv4 packet
@@ -133,7 +133,7 @@ where
 
 impl<B, C> Packet<B, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Getters */
     /// Returns the version field of the header
@@ -261,7 +261,7 @@ where
 
 impl<B, C> Packet<B, C>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Miscellaneous */
     /// View into the payload
@@ -278,7 +278,7 @@ where
 
 impl<B, C> Packet<B, C>
 where
-    B: AsSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + Resize,
 {
     /* Miscellaneous */
     /// Returns the payload of this frame
@@ -292,7 +292,7 @@ where
 
 impl<B> Packet<B, Invalid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /* Constructors */
     /// Transforms the given buffer into an IPv4 packet
@@ -397,7 +397,7 @@ where
 
 impl<B> Packet<B, Valid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /// Truncates the *payload* to the specified length
     pub fn truncate(self, len: u16) -> Packet<B, Invalid> {
@@ -409,7 +409,7 @@ where
 
 impl<B> Packet<B, Invalid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the version field of the header
@@ -507,7 +507,7 @@ where
 
 impl<B> Packet<B, Valid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the version field of the header
@@ -591,7 +591,7 @@ where
 /// NOTE excludes the payload
 impl<B, C> fmt::Debug for Packet<B, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ipv4::Packet")
@@ -651,15 +651,16 @@ impl fmt::Display for Addr {
     }
 }
 
-full_range!(u8,
-/// IP protocol
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Protocol {
-    /// UDP
-    Udp = 0x11,
-    /// ICMP
-    Icmp = 0x01,
-}
+full_range!(
+    u8,
+    /// IP protocol
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Protocol {
+        /// UDP
+        Udp = 0x11,
+        /// ICMP
+        Icmp = 0x01,
+    }
 );
 
 /// Computes the IPv4 checksum of the header
@@ -697,7 +698,7 @@ pub(crate) fn verify_checksum(header: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use {Buffer, ipv4};
+    use {ipv4, Buffer};
 
     #[test]
     fn checksum() {

@@ -1,8 +1,10 @@
 set -euxo pipefail
 
 main() {
-    if [ $TARGET != x86_64-unknown-linux-gnu ]; then
+    if [ $TARGET != rustfmt ]; then
         rustup target add $TARGET
+    else
+        rustup component add rustfmt
     fi
 }
 

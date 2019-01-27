@@ -1,7 +1,7 @@
 use core::u16;
 
-use cast::{usize, u16};
-use as_slice::{AsSlice, AsMutSlice};
+use as_slice::{AsMutSlice, AsSlice};
+use cast::{u16, usize};
 
 use traits::Resize;
 
@@ -70,7 +70,7 @@ use traits::Resize;
 /// stored in the type system.
 pub struct Buffer<CHUNK>
 where
-    CHUNK: AsSlice<Element=u8>,
+    CHUNK: AsSlice<Element = u8>,
 {
     chunk: CHUNK,
     offset: u16,
@@ -79,7 +79,7 @@ where
 
 impl<C> Buffer<C>
 where
-    C: AsSlice<Element=u8>,
+    C: AsSlice<Element = u8>,
 {
     /// Creates a new buffer from the given chunk of memory
     ///
@@ -113,7 +113,7 @@ where
 
 impl<C> AsSlice for Buffer<C>
 where
-    C: AsSlice<Element=u8>,
+    C: AsSlice<Element = u8>,
 {
     type Element = u8;
     fn as_slice(&self) -> &[u8] {
@@ -125,7 +125,7 @@ where
 
 impl<C> AsMutSlice for Buffer<C>
 where
-    C: AsMutSlice<Element=u8>,
+    C: AsMutSlice<Element = u8>,
 {
     fn as_mut_slice(&mut self) -> &mut [u8] {
         let start = usize(self.offset);
@@ -136,7 +136,7 @@ where
 
 impl<C> Resize for Buffer<C>
 where
-    C: AsSlice<Element=u8>,
+    C: AsSlice<Element = u8>,
 {
     fn slice_from(&mut self, offset: u16) {
         assert!(offset <= self.len);

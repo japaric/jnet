@@ -11,9 +11,9 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Range, RangeFrom};
 
+use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::usize;
-use as_slice::{AsSlice, AsMutSlice};
 
 use fmt::Hex;
 use ipv4;
@@ -33,7 +33,7 @@ pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
 /// ICMP packet
 pub struct Packet<BUFFER, TYPE, CHECKSUM>
 where
-    BUFFER: AsSlice<Element=u8>,
+    BUFFER: AsSlice<Element = u8>,
     TYPE: 'static,
 {
     buffer: BUFFER,
@@ -57,7 +57,7 @@ unsafe impl Echo for EchoRequest {}
 /* EchoRequest */
 impl<B> Packet<B, EchoRequest, Invalid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /* Constructors */
     /// Transforms the input buffer into a Echo Request ICMP packet
@@ -76,7 +76,7 @@ where
 /* EchoReply OR EchoRequest */
 impl<B, E, C> Packet<B, E, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
     E: Echo,
 {
     /* Getters */
@@ -93,7 +93,7 @@ where
 
 impl<B, E> Packet<B, E, Invalid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
     E: Echo,
 {
     /* Setters */
@@ -111,7 +111,7 @@ where
 /* Unknown */
 impl<B> Packet<B, Unknown, Valid>
 where
-    B: AsSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + Resize,
 {
     /* Constructors */
     /// Parses the input bytes into a
@@ -132,7 +132,7 @@ where
 
 impl<B> Packet<B, Unknown, Invalid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the Type field of the header
@@ -148,7 +148,7 @@ where
 
 impl<B> Packet<B, Unknown, Valid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the Type field of the header
@@ -168,7 +168,7 @@ where
 
 impl<B, C> Packet<B, Unknown, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /// Downcasts this packet with unknown type into a specific type
     pub fn downcast<TYPE>(self) -> Result<Packet<B, TYPE, C>, Self>
@@ -181,7 +181,7 @@ where
 
 impl<B, C> From<Packet<B, EchoRequest, C>> for Packet<B, EchoReply, Valid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     fn from(p: Packet<B, EchoRequest, C>) -> Self {
         let mut p: Packet<B, Unknown, Invalid> = unsafe { Packet::unchecked(p.buffer) };
@@ -193,7 +193,7 @@ where
 
 impl<B, C> TryFrom<Packet<B, Unknown, C>> for Packet<B, EchoReply, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     type Error = Packet<B, Unknown, C>;
 
@@ -208,7 +208,7 @@ where
 
 impl<B, C> TryFrom<Packet<B, Unknown, C>> for Packet<B, EchoRequest, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     type Error = Packet<B, Unknown, C>;
 
@@ -224,7 +224,7 @@ where
 /* TYPE */
 impl<B, T, C> Packet<B, T, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Constructors */
     unsafe fn unchecked(buffer: B) -> Self {
@@ -285,7 +285,7 @@ where
 
 impl<B, T, C> Packet<B, T, C>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Private */
     fn as_mut_slice(&mut self) -> &mut [u8] {
@@ -295,7 +295,7 @@ where
 
 impl<B, T> Packet<B, T, Invalid>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
@@ -313,7 +313,7 @@ where
 
 impl<B, T> Packet<B, T, Valid>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn invalidate_header_checksum(self) -> Packet<B, T, Invalid> {
         unsafe { Packet::unchecked(self.buffer) }
@@ -322,7 +322,7 @@ where
 
 impl<B, T, C> Clone for Packet<B, T, C>
 where
-    B: AsSlice<Element=u8> + Clone,
+    B: AsSlice<Element = u8> + Clone,
 {
     fn clone(&self) -> Self {
         Packet {
@@ -336,7 +336,7 @@ where
 /// NOTE excludes the payload
 impl<B, E, C> fmt::Debug for Packet<B, E, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
     E: Echo,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -353,37 +353,38 @@ where
 
 impl<B, C> fmt::Debug for Packet<B, Unknown, C>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("icmp::Packet")
             .field("type", &self.get_type())
             .field("code", &self.get_code())
             .field("checksum", &Hex(self.get_checksum()))
-        // .field("payload", &self.payload())
+            // .field("payload", &self.payload())
             .finish()
     }
 }
 
-full_range!(u8,
-/// ICMP types
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Type {
-    /// Echo Reply
-    EchoReply = 0,
-    /// Destination Unreachable
-    DestinationUnreachable = 3,
-    /// Echo Request
-    EchoRequest = 8,
-}
+full_range!(
+    u8,
+    /// ICMP types
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Type {
+        /// Echo Reply
+        EchoReply = 0,
+        /// Destination Unreachable
+        DestinationUnreachable = 3,
+        /// Echo Request
+        EchoRequest = 8,
+    }
 );
 
 #[cfg(test)]
 mod tests {
     use rand::{self, Rng};
 
-    use {ether, icmp, mac, ipv4};
     use Buffer;
+    use {ether, icmp, ipv4, mac};
 
     const SIZE: usize = 42;
 
@@ -392,12 +393,12 @@ mod tests {
         1, 1, 1, 1, 1, 1, // eth: source
         8, 0,  // eth: type
         69, //ipv4: version & ihl
-        0, // ipv4: DSCP & ECN
+        0,  // ipv4: DSCP & ECN
         0, 28, // ipv4: total length
         0, 0, // ipv4: identification
-        64, 0, // ipv4: fragments
+        64, 0,  // ipv4: fragments
         64, // ipv4: TTL
-        1, // ipv4: protocol
+        1,  // ipv4: protocol
         185, 110, // ipv4: checksum
         192, 168, 0, 33, // ipv4: source
         192, 168, 0, 1, // ipv4: destination

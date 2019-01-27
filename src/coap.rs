@@ -11,9 +11,9 @@ use core::ops::Range;
 use core::option::Option as CoreOption;
 use core::{fmt, str};
 
+use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{usize, u16, u8};
-use as_slice::{AsSlice, AsMutSlice};
+use cast::{u16, u8, usize};
 
 use traits::Resize;
 
@@ -101,7 +101,7 @@ const LENGTH16: u8 = 14;
 // bytes to the start of the payload
 pub struct Message<BUFFER>
 where
-    BUFFER: AsSlice<Element=u8>,
+    BUFFER: AsSlice<Element = u8>,
 {
     buffer: BUFFER,
     // Position of the `PAYLOAD_MARKER`. Cached to avoid traversing the options (O(N) runtime) when
@@ -115,7 +115,7 @@ where
 
 impl<B> Message<B>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /// Parses bytes into a CoAP message
     pub fn parse(bytes: B) -> Result<Self, B> {
@@ -146,8 +146,8 @@ where
 
             loop {
                 let head = *match bytes.as_slice().get(usize(cursor)) {
-                    Some(b) => { b },
-                    None => { break }
+                    Some(b) => b,
+                    None => break,
                 };
 
                 if head == PAYLOAD_MARKER {
@@ -169,7 +169,8 @@ where
                         return Err(());
                     }
 
-                    let halfword = NE::read_u16(&bytes.as_slice()[usize(cursor)..usize(cursor + 2)]);
+                    let halfword =
+                        NE::read_u16(&bytes.as_slice()[usize(cursor)..usize(cursor + 2)]);
                     cursor += 2;
 
                     number += halfword + OFFSET16;
@@ -189,7 +190,8 @@ where
                         return Err(());
                     }
 
-                    let halfword = NE::read_u16(&bytes.as_slice()[usize(cursor)..usize(cursor + 2)]);
+                    let halfword =
+                        NE::read_u16(&bytes.as_slice()[usize(cursor)..usize(cursor + 2)]);
                     cursor += 2;
 
                     cursor += halfword + OFFSET16;
@@ -255,7 +257,7 @@ where
     pub fn options(&self) -> Options {
         Options {
             number: 0,
-            ptr: &self.as_slice()[usize(self.options_start())..usize(self.payload_marker)]
+            ptr: &self.as_slice()[usize(self.options_start())..usize(self.payload_marker)],
         }
     }
 
@@ -312,7 +314,7 @@ where
 
 impl<B> Message<B>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Constructors */
     /// Transforms the given buffer into a CoAP message
@@ -400,7 +402,10 @@ where
             cursor += 1;
         } else {
             set!(self.as_mut_slice()[start], delta, DELTA16);
-            NE::write_u16(&mut self.as_mut_slice()[cursor..cursor + 2], delta - OFFSET16);
+            NE::write_u16(
+                &mut self.as_mut_slice()[cursor..cursor + 2],
+                delta - OFFSET16,
+            );
             cursor += 2;
         }
 
@@ -481,7 +486,7 @@ where
 
 impl<B> Message<B>
 where
-    B: AsSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + Resize,
 {
     /// Truncates the *payload* to the specified length
     pub fn truncate(&mut self, len: u16) {
@@ -496,7 +501,7 @@ where
 
 impl<B> Message<B>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /// Fills the payload with the given data and adjusts the length of the CoAP message
     pub fn set_payload(&mut self, data: &[u8]) {
@@ -510,16 +515,16 @@ where
 
 impl<B> fmt::Debug for Message<B>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Adapter to format the `Options` iterator as a map
         struct Options<'a, B>(&'a Message<B>)
         where
-            B: AsSlice<Element=u8> + 'a;
+            B: AsSlice<Element = u8> + 'a;
         impl<'a, B> fmt::Debug for Options<'a, B>
         where
-            B: AsSlice<Element=u8>,
+            B: AsSlice<Element = u8>,
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 let mut m = f.debug_map();
@@ -780,119 +785,120 @@ impl fmt::Display for Code {
 }
 
 code!(
-/// CoAP Method Codes
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Method {
-    /// GET
-    Get = (0, 1),
-    /// POST
-    Post = (0, 2),
-    /// PUT
-    Put = (0, 3),
-    /// DELETE
-    Delete = (0, 4),
-}
+    /// CoAP Method Codes
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Method {
+        /// GET
+        Get = (0, 1),
+        /// POST
+        Post = (0, 2),
+        /// PUT
+        Put = (0, 3),
+        /// DELETE
+        Delete = (0, 4),
+    }
 );
 
 code!(
-/// CoAP Response Codes
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Response {
-    // Success
-    /// Created
-    Created = (2, 1),
-    /// Deleted
-    Deleted = (2, 2),
-    /// Valid
-    Valid = (2, 3),
-    /// Changed
-    Changed = (2, 4),
-    /// Content
-    Content = (2, 5),
+    /// CoAP Response Codes
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Response {
+        // Success
+        /// Created
+        Created = (2, 1),
+        /// Deleted
+        Deleted = (2, 2),
+        /// Valid
+        Valid = (2, 3),
+        /// Changed
+        Changed = (2, 4),
+        /// Content
+        Content = (2, 5),
 
-    // Client error
-    /// Bad Request
-    BadRequest = (4, 0),
-    /// Unauthorized
-    Unauthorized = (4, 1),
-    /// Bad Option
-    BadOption = (4, 2),
-    /// Forbidden
-    Forbidden = (4, 3),
-    /// Not Found
-    NotFound = (4, 4),
-    /// Method Not Allowed
-    MethodNotAllowed = (4, 5),
-    /// Not Acceptable
-    NotAcceptable = (4, 6),
-    /// Precondition Failed
-    PreconditionFailed = (4, 12),
-    /// Request Entity Too Large
-    RequestEntityTooLarge = (4, 13),
-    /// Unsupported Content-Format
-    UnsupportedContentFormat = (4, 15),
+        // Client error
+        /// Bad Request
+        BadRequest = (4, 0),
+        /// Unauthorized
+        Unauthorized = (4, 1),
+        /// Bad Option
+        BadOption = (4, 2),
+        /// Forbidden
+        Forbidden = (4, 3),
+        /// Not Found
+        NotFound = (4, 4),
+        /// Method Not Allowed
+        MethodNotAllowed = (4, 5),
+        /// Not Acceptable
+        NotAcceptable = (4, 6),
+        /// Precondition Failed
+        PreconditionFailed = (4, 12),
+        /// Request Entity Too Large
+        RequestEntityTooLarge = (4, 13),
+        /// Unsupported Content-Format
+        UnsupportedContentFormat = (4, 15),
 
-    // Server error
-    /// Internal Server Error
-    InternalServerError = (5, 0),
-    /// Not Implemented
-    NotImplemented = (5, 1),
-    /// Bad Gateway
-    BadGateway = (5, 2),
-    /// Service Unavailable
-    ServiceUnavailable = (5, 3),
-    /// Gateway Timeout
-    GatewayTimeout = (5, 4),
-    /// Proxying Not Supported
-    ProxyingNotSupported = (5, 5),
-}
+        // Server error
+        /// Internal Server Error
+        InternalServerError = (5, 0),
+        /// Not Implemented
+        NotImplemented = (5, 1),
+        /// Bad Gateway
+        BadGateway = (5, 2),
+        /// Service Unavailable
+        ServiceUnavailable = (5, 3),
+        /// Gateway Timeout
+        GatewayTimeout = (5, 4),
+        /// Proxying Not Supported
+        ProxyingNotSupported = (5, 5),
+    }
 );
 
-full_range!(u16,
-/// CoAP Option Numbers
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub enum OptionNumber {
-    /// Reserved
-    Reserved0 = 0,
-    /// If-Match
-    IfMatch = 1,
-    /// Uri-Host
-    UriHost = 3,
-    /// ETag
-    ETag = 4,
-    /// If-None-Patch
-    IfNoneMatch = 5,
-    /// Uri-Port
-    UriPort = 7,
-    /// Location-Path
-    LocationPath = 8,
-    /// Uri-Path
-    UriPath = 11,
-    /// Content-Format
-    ContentFormat = 12,
-    /// Max-Age
-    MaxAge = 14,
-    /// Uri-Query
-    UriQuery = 15,
-    /// Accept
-    Accept = 17,
-    /// Location-Query
-    LocationQuery = 20,
-    /// Proxy-Uri
-    ProxyUri = 35,
-    /// Proxy-Scheme
-    ProxyScheme = 39,
-    /// Size1
-    Size1 = 60,
-    /// Reserved
-    Reserved1 = 128,
-    /// Reserved
-    Reserved2 = 132,
-    /// Reserved
-    Reserved3 = 136,
-    /// Reserved
-    Reserved4 = 140,
-}
+full_range!(
+    u16,
+    /// CoAP Option Numbers
+    #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+    pub enum OptionNumber {
+        /// Reserved
+        Reserved0 = 0,
+        /// If-Match
+        IfMatch = 1,
+        /// Uri-Host
+        UriHost = 3,
+        /// ETag
+        ETag = 4,
+        /// If-None-Patch
+        IfNoneMatch = 5,
+        /// Uri-Port
+        UriPort = 7,
+        /// Location-Path
+        LocationPath = 8,
+        /// Uri-Path
+        UriPath = 11,
+        /// Content-Format
+        ContentFormat = 12,
+        /// Max-Age
+        MaxAge = 14,
+        /// Uri-Query
+        UriQuery = 15,
+        /// Accept
+        Accept = 17,
+        /// Location-Query
+        LocationQuery = 20,
+        /// Proxy-Uri
+        ProxyUri = 35,
+        /// Proxy-Scheme
+        ProxyScheme = 39,
+        /// Size1
+        Size1 = 60,
+        /// Reserved
+        Reserved1 = 128,
+        /// Reserved
+        Reserved2 = 132,
+        /// Reserved
+        Reserved3 = 136,
+        /// Reserved
+        Reserved4 = 140,
+    }
 );
 
 impl OptionNumber {
@@ -914,22 +920,23 @@ impl OptionNumber {
     }
 }
 
-full_range!(u16,
-/// CoAP Content-Formats
-pub enum ContentFormat {
-    /// text/plain; charset=utf-8
-    TextPlain = 0,
-    /// application/link-format
-    ApplicationLinkFormat = 40,
-    /// application/xml
-    ApplicationXml = 41,
-    /// application/octet-stream
-    ApplicationOctetStream = 42,
-    /// application/exi
-    ApplicationExi = 47,
-    /// application/json
-    ApplicationJson = 50,
-}
+full_range!(
+    u16,
+    /// CoAP Content-Formats
+    pub enum ContentFormat {
+        /// text/plain; charset=utf-8
+        TextPlain = 0,
+        /// application/link-format
+        ApplicationLinkFormat = 40,
+        /// application/xml
+        ApplicationXml = 41,
+        /// application/octet-stream
+        ApplicationOctetStream = 42,
+        /// application/exi
+        ApplicationExi = 47,
+        /// application/json
+        ApplicationJson = 50,
+    }
 );
 
 #[cfg(test)]

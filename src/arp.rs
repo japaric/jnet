@@ -11,12 +11,12 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Range, RangeFrom};
 
+use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{usize, u16};
-use as_slice::{AsSlice, AsMutSlice};
+use cast::{u16, usize};
 
+use {ether, ipv4, mac};
 use {Resize, Unknown};
-use {ether, mac, ipv4};
 
 /* Packet structure */
 const HTYPE: Range<usize> = 0..2;
@@ -44,7 +44,7 @@ pub enum Ipv4 {}
 /// ARP packet
 pub struct Packet<BUFFER, HTYPE = Ethernet, PTYPE = Ipv4>
 where
-    BUFFER: AsSlice<Element=u8>,
+    BUFFER: AsSlice<Element = u8>,
     HTYPE: 'static,
     PTYPE: 'static,
 {
@@ -56,7 +56,7 @@ where
 /* Ethernet - Ipv4 */
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /* Constructors */
     /// Transforms the given buffer into an ARP packet
@@ -95,7 +95,7 @@ where
 
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Getters */
     /// Returns the SHA (Sender Hardware Address) field of the payload
@@ -126,7 +126,7 @@ where
 
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the SHA (Sender Hardware Address) field of the payload
@@ -187,7 +187,7 @@ where
 /* Unknown - Unknown */
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Getters */
     // htype: covered by the generic impl
@@ -236,7 +236,7 @@ where
 
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + Resize,
 {
     /// Parses bytes into an ARP packet
     pub fn parse(bytes: B) -> Result<Self, B> {
@@ -267,7 +267,7 @@ where
 
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the HTYPE (Hardware TYPE) field of the header
@@ -283,13 +283,15 @@ where
 
 impl<B> TryFrom<Packet<B, Unknown, Unknown>> for Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     type Error = Packet<B, Unknown, Unknown>;
 
     fn try_from(p: Packet<B, Unknown, Unknown>) -> Result<Self, Packet<B, Unknown, Unknown>> {
-        if p.get_htype() == HardwareType::Ethernet && p.get_ptype() == ether::Type::Ipv4
-            && p.get_hlen() == 6 && p.get_plen() == 4
+        if p.get_htype() == HardwareType::Ethernet
+            && p.get_ptype() == ether::Type::Ipv4
+            && p.get_hlen() == 6
+            && p.get_plen() == 4
         {
             Ok(Packet {
                 buffer: p.buffer,
@@ -305,7 +307,7 @@ where
 /* HTYPE - PTYPE */
 impl<B, H, P> Packet<B, H, P>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Getters */
     /// Returns the HTYPE (Hardware TYPE) field of the header
@@ -373,7 +375,7 @@ where
 
 impl<B, H, P> Packet<B, H, P>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the OPER (OPERation) field of the header
@@ -394,7 +396,7 @@ where
 
 impl<B, H, P> Clone for Packet<B, H, P>
 where
-    B: Clone + AsSlice<Element=u8>,
+    B: Clone + AsSlice<Element = u8>,
 {
     fn clone(&self) -> Self {
         Packet {
@@ -405,15 +407,11 @@ where
     }
 }
 
-impl<B, H, P> Copy for Packet<B, H, P>
-where
-    B: Copy + AsSlice<Element=u8>,
-{
-}
+impl<B, H, P> Copy for Packet<B, H, P> where B: Copy + AsSlice<Element = u8> {}
 
 impl<B> fmt::Debug for Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("arp::Packet")
@@ -428,7 +426,7 @@ where
 
 impl<B> fmt::Debug for Packet<B, Unknown, Unknown>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("arp::Packet")
@@ -445,32 +443,34 @@ where
     }
 }
 
-full_range!(u16,
-/// Hardware type
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum HardwareType {
-    /// Ethernet
-    Ethernet = 1,
-}
+full_range!(
+    u16,
+    /// Hardware type
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum HardwareType {
+        /// Ethernet
+        Ethernet = 1,
+    }
 );
 
-full_range!(u16,
-/// ARP operation
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Operation {
-    /// Request operation
-    Request = 1,
-    /// Reply operation
-    Reply = 2,
-}
+full_range!(
+    u16,
+    /// ARP operation
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Operation {
+        /// Request operation
+        Request = 1,
+        /// Reply operation
+        Reply = 2,
+    }
 );
 
 #[cfg(test)]
 mod tests {
     use rand::{self, Rng};
 
-    use {arp, ether, mac, ipv4};
     use Buffer;
+    use {arp, ether, ipv4, mac};
 
     const SIZE: usize = 46;
 
