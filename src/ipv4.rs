@@ -15,7 +15,7 @@ use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u32, usize};
 
 use fmt::Hex;
-use traits::{Resize, UxxExt};
+use traits::{Resize, UncheckedIndex, UxxExt};
 use {icmp, udp};
 use {Invalid, Valid};
 
@@ -138,27 +138,27 @@ where
     /* Getters */
     /// Returns the version field of the header
     pub fn get_version(&self) -> u8 {
-        get!(self.as_slice()[VERSION_IHL], version)
+        unsafe { get!(*self.as_slice().gu(VERSION_IHL), version) }
     }
 
     /// Returns the IHL (Internet Header Length) field of the header
     pub fn get_ihl(&self) -> u8 {
-        get!(self.as_slice()[VERSION_IHL], ihl)
+        unsafe { get!(self.as_slice().gu(VERSION_IHL), ihl) }
     }
 
     /// Returns the DSCP (Differentiated Services Code Point) field of the header
     pub fn get_dscp(&self) -> u8 {
-        get!(self.as_slice()[DSCP_ECN], dscp)
+        unsafe { get!(self.as_slice().gu(DSCP_ECN), dscp) }
     }
 
     /// Returns the ECN (Explicit Congestion Notification) field of the header
     pub fn get_ecn(&self) -> u8 {
-        get!(self.as_slice()[DSCP_ECN], ecn)
+        unsafe { get!(self.as_slice().gu(DSCP_ECN), ecn) }
     }
 
     /// Returns the total length field of the header
     pub fn get_total_length(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[TOTAL_LENGTH])
+        unsafe { NE::read_u16(self.as_slice().r(TOTAL_LENGTH)) }
     }
 
     /// Returns the length (header + data) of this packet
@@ -170,60 +170,54 @@ where
 
     /// Returns the identification field of the header
     pub fn get_identification(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[IDENTIFICATION])
+        unsafe { NE::read_u16(&self.as_slice().r(IDENTIFICATION)) }
     }
 
     /// Returns the DF (Don't Fragment) field of the header
     pub fn get_df(&self) -> bool {
-        get!(self.as_slice()[FLAGS], df) == 1
+        unsafe { get!(self.as_slice().gu(FLAGS), df) == 1 }
     }
 
     /// Returns the MF (More Fragments) field of the header
     pub fn get_mf(&self) -> bool {
-        get!(self.as_slice()[FLAGS], mf) == 1
+        unsafe { get!(self.as_slice().gu(FLAGS), mf) == 1 }
     }
 
     /// Returns the Fragment Offset field of the header
     pub fn get_fragment_offset(&self) -> u16 {
-        get!(
-            NE::read_u16(&self.as_slice()[FRAGMENT_OFFSET]),
-            fragment_offset
-        )
+        unsafe {
+            get!(
+                NE::read_u16(&self.as_slice().r(FRAGMENT_OFFSET)),
+                fragment_offset
+            )
+        }
     }
 
     /// Returns the TTL (Time To Live) field of the header
     pub fn get_ttl(&self) -> u8 {
-        self.as_slice()[TTL]
+        unsafe { self.as_slice().gu(TTL).clone() }
     }
 
     /// Returns the protocol field of the header
     pub fn get_protocol(&self) -> Protocol {
-        self.as_slice()[PROTOCOL].into()
+        unsafe { self.as_slice().gu(PROTOCOL).clone().into() }
     }
 
     /// Returns the Source (IP address) field of the header
     pub fn get_source(&self) -> Addr {
-        Addr(*array_ref!(
-            self.as_slice(),
-            SOURCE.start,
-            SOURCE.end - SOURCE.start
-        ))
+        unsafe { Addr(*(self.as_slice().as_ptr().add(SOURCE.start) as *const _)) }
     }
 
     /// Returns the Destination (IP address) field of the header
     pub fn get_destination(&self) -> Addr {
-        Addr(*array_ref!(
-            self.as_slice(),
-            DESTINATION.start,
-            DESTINATION.end - DESTINATION.start
-        ))
+        unsafe { Addr(*(self.as_slice().as_ptr().add(DESTINATION.start) as *const _)) }
     }
 
     /* Miscellaneous */
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
         let start = usize(self.header_len());
-        &self.as_slice()[start..]
+        unsafe { &self.as_slice().rf(start..) }
     }
 
     /* Private */
@@ -232,7 +226,7 @@ where
     }
 
     fn get_header_checksum(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[CHECKSUM])
+        unsafe { NE::read_u16(&self.as_slice().r(CHECKSUM)) }
     }
 
     fn header_len(&self) -> u8 {
@@ -244,7 +238,7 @@ where
     }
 
     fn header(&self) -> &[u8] {
-        &self.as_slice()[..usize(self.header_len())]
+        unsafe { self.as_slice().rt(..usize(self.header_len())) }
     }
 
     fn invalidate_header_checksum(self) -> Packet<B, Invalid> {
@@ -267,7 +261,7 @@ where
     /// View into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
         let start = usize(self.header_len());
-        &mut self.as_mut_slice()[start..]
+        unsafe { self.as_mut_slice().rfm(start..) }
     }
 
     /* Private */
@@ -414,7 +408,9 @@ where
     /* Setters */
     /// Sets the version field of the header
     pub fn set_version(&mut self, version: u8) {
-        set!(self.as_mut_slice()[VERSION_IHL], version, version);
+        unsafe {
+            set_!(self.as_mut_slice().gum(VERSION_IHL), version, version);
+        }
     }
 
     // NOTE(unsafe) this doesn't check that the header still fits in the buffer
@@ -688,8 +684,10 @@ pub(crate) fn compute_checksum(header: &[u8], cksum_pos: usize) -> u16 {
 
 /// Verifies the IPv4 checksum of the header
 pub(crate) fn verify_checksum(header: &[u8]) -> bool {
+    debug_assert!(header.len() % 2 == 0);
+
     let mut sum = 0u32;
-    for chunk in header.chunks(2) {
+    for chunk in header.chunks_exact(2) {
         sum = sum.wrapping_add(u32(NE::read_u16(chunk)));
     }
 

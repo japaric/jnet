@@ -1,6 +1,108 @@
+use core::ops::{Range, RangeFrom, RangeTo};
+#[cfg(not(debug_assertions))]
+use core::slice;
+
 use cast::usize;
 
-// TODO impl Chunk for Box<[u8]>
+/// IMPLEMENTATION DETAIL
+pub trait UncheckedIndex {
+    type T;
+
+    // get_unchecked
+    unsafe fn gu(&self, i: usize) -> &Self::T;
+    // get_unchecked_mut
+    unsafe fn gum(&mut self, i: usize) -> &mut Self::T;
+    unsafe fn r(&self, r: Range<usize>) -> &Self;
+    unsafe fn rm(&mut self, r: Range<usize>) -> &mut Self;
+    unsafe fn rt(&self, r: RangeTo<usize>) -> &Self;
+    unsafe fn rtm(&mut self, r: RangeTo<usize>) -> &mut Self;
+    unsafe fn rf(&self, r: RangeFrom<usize>) -> &Self;
+    unsafe fn rfm(&mut self, r: RangeFrom<usize>) -> &mut Self;
+}
+
+impl<T> UncheckedIndex for [T] {
+    type T = T;
+
+    unsafe fn gu(&self, at: usize) -> &T {
+        debug_assert!(at < self.len());
+
+        self.get_unchecked(at)
+    }
+
+    unsafe fn gum(&mut self, at: usize) -> &mut T {
+        debug_assert!(at < self.len());
+
+        self.get_unchecked_mut(at)
+    }
+
+    #[cfg(debug_assertions)]
+    unsafe fn r(&self, r: Range<usize>) -> &[T] {
+        &self[r]
+    }
+
+    #[cfg(not(debug_assertions))]
+    unsafe fn r(&self, r: Range<usize>) -> &[T] {
+        let o = r.start;
+        let l = r.end - o;
+        slice::from_raw_parts(self.as_ptr().add(o), l)
+    }
+
+    #[cfg(debug_assertions)]
+    unsafe fn rm(&mut self, r: Range<usize>) -> &mut [T] {
+        &mut self[r]
+    }
+
+    #[cfg(not(debug_assertions))]
+    unsafe fn rm(&mut self, r: Range<usize>) -> &mut [T] {
+        let o = r.start;
+        let l = r.end - o;
+        slice::from_raw_parts_mut(self.as_mut_ptr().add(o), l)
+    }
+
+    #[cfg(debug_assertions)]
+    unsafe fn rt(&self, r: RangeTo<usize>) -> &[T] {
+        &self[r]
+    }
+
+    #[cfg(not(debug_assertions))]
+    unsafe fn rt(&self, r: RangeTo<usize>) -> &[T] {
+        slice::from_raw_parts(self.as_ptr(), r.end)
+    }
+
+    #[cfg(debug_assertions)]
+    unsafe fn rtm(&mut self, r: RangeTo<usize>) -> &mut [T] {
+        &mut self[r]
+    }
+
+    #[cfg(not(debug_assertions))]
+    unsafe fn rtm(&mut self, r: RangeTo<usize>) -> &mut [T] {
+        slice::from_raw_parts_mut(self.as_mut_ptr(), r.end)
+    }
+
+    #[cfg(debug_assertions)]
+    unsafe fn rf(&self, r: RangeFrom<usize>) -> &[T] {
+        &self[r]
+    }
+
+    #[cfg(not(debug_assertions))]
+    unsafe fn rf(&self, r: RangeFrom<usize>) -> &[T] {
+        let o = r.start;
+        let l = self.len() - o;
+        slice::from_raw_parts(self.as_ptr().add(o), l)
+    }
+
+    #[cfg(debug_assertions)]
+    unsafe fn rfm(&mut self, r: RangeFrom<usize>) -> &mut [T] {
+        &mut self[r]
+    }
+
+    #[cfg(not(debug_assertions))]
+    unsafe fn rfm(&mut self, r: RangeFrom<usize>) -> &mut [T] {
+        let o = r.start;
+        let l = self.len() - o;
+        slice::from_raw_parts_mut(self.as_mut_ptr().add(o), l)
+    }
+}
 
 /// A buffer that can be resized in place
 pub trait Resize {
@@ -13,13 +115,13 @@ pub trait Resize {
 
 impl<'a> Resize for &'a [u8] {
     fn slice_from(&mut self, offset: u16) {
-        *self = &self[usize(offset)..]
+        *self = unsafe { self.rf(usize(offset)..) };
     }
 
     fn truncate(&mut self, len: u16) {
         let len = usize(len);
         if self.len() > len {
-            *self = &self[..len]
+            *self = unsafe { self.rt(..len) };
         }
     }
 }
@@ -27,15 +129,14 @@ impl<'a> Resize for &'a [u8] {
 impl<'a> Resize for &'a mut [u8] {
     fn slice_from(&mut self, offset: u16) {
         // NOTE(unsafe) side step borrow checker complaints
-        *self = unsafe { &mut *(&self[usize(offset)..] as *const _ as *mut _) };
+        *self = unsafe { &mut *(self.rfm(usize(offset)..) as *mut [u8]) };
     }
 
     fn truncate(&mut self, len: u16) {
         let old = self.len();
         let len = usize(len);
         if old > len {
-            // NOTE(unsafe) side step borrow checker complaints
-            *self = unsafe { &mut *(&self[..usize(len)] as *const _ as *mut _) };
+            *self = unsafe { &mut *(self.rtm(..usize(len)) as *mut [u8]) };
         }
     }
 }

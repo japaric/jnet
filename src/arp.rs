@@ -100,22 +100,22 @@ where
     /* Getters */
     /// Returns the SHA (Sender Hardware Address) field of the payload
     pub fn get_sha(&self) -> mac::Addr {
-        mac::Addr(*array_ref!(self.as_slice(), SHA.start, SHA.end - SHA.start))
+        unsafe { mac::Addr(*(self.as_slice().as_ptr().add(SHA.start) as *const _)) }
     }
 
     /// Returns the SPA (Sender Protocol Address) field of the payload
     pub fn get_spa(&self) -> ipv4::Addr {
-        ipv4::Addr(*array_ref!(self.as_slice(), SPA.start, SPA.end - SPA.start))
+        unsafe { ipv4::Addr(*(self.as_slice().as_ptr().add(SPA.start) as *const _)) }
     }
 
     /// Returns the THA (Target Hardware Address) field of the payload
     pub fn get_tha(&self) -> mac::Addr {
-        mac::Addr(*array_ref!(self.as_slice(), THA.start, THA.end - THA.start))
+        unsafe { mac::Addr(*(self.as_slice().as_ptr().add(THA.start) as *const _)) }
     }
 
     /// Returns the TPA (Target Protocol Address) field of the payload
     pub fn get_tpa(&self) -> ipv4::Addr {
-        ipv4::Addr(*array_ref!(self.as_slice(), TPA.start, TPA.end - TPA.start))
+        unsafe { ipv4::Addr(*(self.as_slice().as_ptr().add(TPA.start) as *const _)) }
     }
 
     /// Is this an ARP probe?
