@@ -1,11 +1,11 @@
 //! UDP: User Datagram Protocol
 
-use core::{fmt, u16};
 use core::ops::{Range, RangeFrom};
+use core::{fmt, u16};
 
+use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{usize, u16};
-use as_slice::{AsSlice, AsMutSlice};
+use cast::{u16, usize};
 
 use {coap, Resize};
 
@@ -22,14 +22,14 @@ pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
 /// UDP packet
 pub struct Packet<BUFFER>
 where
-    BUFFER: AsSlice<Element=u8>,
+    BUFFER: AsSlice<Element = u8>,
 {
     buffer: BUFFER,
 }
 
 impl<B> Packet<B>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Constructors */
     /// Parses the bytes as an UDP packet
@@ -97,7 +97,7 @@ where
 
 impl<B> Packet<B>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the Source (port) field of the header
@@ -138,7 +138,7 @@ where
 
 impl<B> Packet<B>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /* Constructors */
     /// Transforms the given buffer into an UDP packet
@@ -198,7 +198,7 @@ where
 /// NOTE excludes the payload
 impl<B> fmt::Debug for Packet<B>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("udp::Packet")
@@ -215,24 +215,24 @@ where
 mod tests {
     use rand::{self, Rng};
 
-    use {ether, mac, udp, Buffer, ipv4};
+    use {ether, ipv4, mac, udp, Buffer};
 
     const SIZE: usize = 56;
 
     const BYTES: &[u8; SIZE] = &[
         255, 255, 255, 255, 255, 255, // ether: destination
         1, 1, 1, 1, 1, 1, // ether: source
-        8, 0, // ether: type
+        8, 0,  // ether: type
         69, // ipv4: version & IHL
-        0, // ipv4: DSCP & ECN
+        0,  // ipv4: DSCP & ECN
         0, 42, //ipv4: total length
         0, 0, // ipv4: identification
-        64, 0, // ipv4: fragment
+        64, 0,  // ipv4: fragment
         64, //ipv4: ttl
         17, //ipv4: protocol
         185, 80, // ipv4: checksum
         192, 168, 0, 33, // ipv4: source
-        192, 168, 0, 1,  // ipv4: destination
+        192, 168, 0, 1, // ipv4: destination
         0, 0, // udp: source
         5, 57, // udp: destination
         0, 22, // udp: length

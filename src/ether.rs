@@ -3,12 +3,11 @@
 use core::fmt;
 use core::ops::{Range, RangeFrom};
 
+use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{usize, u16};
-use as_slice::{AsSlice, AsMutSlice};
+use cast::{u16, usize};
 
-
-use {arp, mac, ipv4};
+use {arp, ipv4, mac};
 use {Invalid, Resize};
 
 /* Frame format */
@@ -35,14 +34,14 @@ pub const HEADER_SIZE: u16 = TYPE.end as u16;
 #[derive(Clone, Copy)]
 pub struct Frame<BUFFER>
 where
-    BUFFER: AsSlice<Element=u8>,
+    BUFFER: AsSlice<Element = u8>,
 {
     buffer: BUFFER,
 }
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     /* Constructors */
     /// Creates a new Ethernet frame from the given buffer
@@ -114,7 +113,7 @@ where
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the destination field of the header
@@ -146,7 +145,7 @@ where
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + Resize,
 {
     /// Truncates the *payload* of this frame to the specified length
     pub fn truncate(&mut self, len: u16) {
@@ -163,7 +162,7 @@ where
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element=u8> + AsMutSlice<Element=u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
 {
     /// Fills the payload with an ARP packet
     ///
@@ -207,7 +206,7 @@ where
 /// NOTE excludes the payload
 impl<B> fmt::Debug for Frame<B>
 where
-    B: AsSlice<Element=u8>,
+    B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ether::Frame")
@@ -219,17 +218,18 @@ where
     }
 }
 
-full_range!(u16,
-/// Ether Type
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Type {
-    /// IPv4
-    Ipv4 = 0x0800,
-    /// ARP
-    Arp = 0x0806,
-    /// IPv6
-    Ipv6 = 0x08DD,
-}
+full_range!(
+    u16,
+    /// Ether Type
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Type {
+        /// IPv4
+        Ipv4 = 0x0800,
+        /// ARP
+        Arp = 0x0806,
+        /// IPv6
+        Ipv6 = 0x08DD,
+    }
 );
 
 #[cfg(test)]
