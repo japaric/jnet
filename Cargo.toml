@@ -7,7 +7,6 @@ repository = "https://github.com/japaric/jnet"
 version = "0.1.0"
 
 [dependencies]
-arrayref = "0.3.4"
 hash32 = "0.1.0"
 hash32-derive = "0.1.0"
 as-slice = "0.1.0"

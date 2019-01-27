@@ -63,20 +63,12 @@ where
     /* Getters */
     /// Returns the Destination field of the header
     pub fn get_destination(&self) -> mac::Addr {
-        mac::Addr(*array_ref!(
-            self.as_slice(),
-            DESTINATION.start,
-            DESTINATION.end - DESTINATION.start
-        ))
+        unsafe { mac::Addr(*(self.as_slice().as_ptr().add(DESTINATION.start) as *const _)) }
     }
 
     /// Returns the Source field of the header
     pub fn get_source(&self) -> mac::Addr {
-        mac::Addr(*array_ref!(
-            self.as_slice(),
-            SOURCE.start,
-            SOURCE.end - SOURCE.start
-        ))
+        unsafe { mac::Addr(*(self.as_slice().as_ptr().add(SOURCE.start) as *const _)) }
     }
 
     /// Returns the Type field of the header

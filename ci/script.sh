@@ -12,10 +12,16 @@ main() {
         cargo check --target $TARGET --examples
         cargo test --target $TARGET
         return
+    elif [ $TARGET = thumbv7m-none-eabi ]; then
+        ( cd panic-never && cargo build --examples --release )
     fi
 }
 
 # fake Travis variables to be able to run this on a local machine
+if [ -z ${TRAVIS_BRANCH-} ]; then
+    TRAVIS_BRANCH=auto
+fi
+
 if [ -z ${TARGET-} ]; then
     TARGET=$(rustc -Vv | grep host | cut -d ' ' -f2)
 fi

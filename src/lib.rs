@@ -95,8 +95,6 @@
 #![feature(try_from)]
 #![no_std]
 
-#[macro_use]
-extern crate arrayref;
 extern crate byteorder;
 extern crate cast;
 #[macro_use]
