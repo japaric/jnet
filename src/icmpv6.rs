@@ -11,9 +11,11 @@
 //!
 //! [1]: https://tools.ietf.org/html/rfc2461
 
-use core::fmt;
-use core::marker::PhantomData;
-use core::ops::{Range, RangeFrom};
+use core::{
+    fmt,
+    marker::PhantomData,
+    ops::{Range, RangeFrom},
+};
 
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
@@ -22,7 +24,7 @@ use owning_slice::Truncate;
 use crate::{
     fmt::Quoted,
     ipv6,
-    traits::{TryFrom, TryInto},
+    traits::{TryFrom, TryInto, UncheckedIndex},
     Unknown,
 };
 
@@ -90,21 +92,21 @@ where
     /* Getters */
     /// Reads the 'Type' field
     pub fn get_type(&self) -> Type {
-        Type::from(self.as_slice()[TYPE])
+        unsafe { Type::from(*self.as_slice().gu(TYPE)) }
     }
 
     /// Reads the 'Code' field
     pub fn get_code(&self) -> u8 {
-        self.as_slice()[CODE]
+        unsafe { *self.as_slice().gu(CODE) }
     }
 
     /// Reads the 'Checksum' field
     pub fn get_checksum(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[CHECKSUM])
+        unsafe { NE::read_u16(&self.as_slice().r(CHECKSUM)) }
     }
 
     /// Returns the byte representation of this frame
-    pub fn bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         self.as_slice()
     }
 
@@ -115,7 +117,7 @@ where
         let mut sum: u32 = 0;
 
         // Pseudo-header
-        for chunk in src.0.chunks(2).chain(dest.0.chunks(2)) {
+        for chunk in src.0.chunks_exact(2).chain(dest.0.chunks_exact(2)) {
             sum += u32::from(NE::read_u16(chunk));
         }
 
@@ -267,15 +269,17 @@ where
     /// Reads the 'Source Link-layer address' option
     // NOTE this contains padding
     pub fn get_source_ll(&self) -> Option<&[u8]> {
-        Options::new(&self.as_slice()[24..])
-            .filter_map(|opt| {
-                if opt.ty == OptionType::SourceLinkLayerAddress {
-                    Some(opt.contents)
-                } else {
-                    None
-                }
-            })
-            .next()
+        unsafe {
+            Options::new(&self.as_slice().rf(24..))
+                .filter_map(|opt| {
+                    if opt.ty == OptionType::SourceLinkLayerAddress {
+                        Some(opt.contents)
+                    } else {
+                        None
+                    }
+                })
+                .next()
+        }
     }
 }
 
@@ -404,17 +408,17 @@ where
     /* Getters */
     /// Reads the 'Router' flag
     pub fn get_router(&self) -> bool {
-        get!(self.as_slice()[RESERVED0], router) == 1
+        unsafe { get!(self.as_slice().gu(RESERVED0), router) == 1 }
     }
 
     /// Reads the 'Solicited' flag
     pub fn get_solicited(&self) -> bool {
-        get!(self.as_slice()[RESERVED0], solicited) == 1
+        unsafe { get!(self.as_slice().gu(RESERVED0), solicited) == 1 }
     }
 
     /// Reads the 'Override' flag
     pub fn get_override(&self) -> bool {
-        get!(self.as_slice()[RESERVED0], override_) == 1
+        unsafe { get!(self.as_slice().gu(RESERVED0), override_) == 1 }
     }
 
     /// Reads the 'Target Address' field
@@ -424,15 +428,17 @@ where
 
     /// Reads the 'Target Link-layer Address' option
     pub fn get_target_ll(&self) -> Option<&[u8]> {
-        Options::new(&self.as_slice()[24..])
-            .filter_map(|opt| {
-                if opt.ty == OptionType::TargetLinkLayerAddress {
-                    Some(opt.contents)
-                } else {
-                    None
-                }
-            })
-            .next()
+        unsafe {
+            Options::new(self.as_slice().rf(24..))
+                .filter_map(|opt| {
+                    if opt.ty == OptionType::TargetLinkLayerAddress {
+                        Some(opt.contents)
+                    } else {
+                        None
+                    }
+                })
+                .next()
+        }
     }
 }
 
@@ -520,17 +526,17 @@ where
     /* Getters */
     /// Reads the 'Identifier' field
     pub fn get_identifier(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[IDENTIFIER])
+        unsafe { NE::read_u16(&self.as_slice().r(IDENTIFIER)) }
     }
 
     /// Reads the 'Sequence number' field
     pub fn get_sequence_number(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[SEQUENCE])
+        unsafe { NE::read_u16(&self.as_slice().r(SEQUENCE)) }
     }
 
     /// Immutable view into the payload of this message
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[SEQUENCE.end..]
+        unsafe { self.as_slice().rf(SEQUENCE.end..) }
     }
 }
 
@@ -645,7 +651,8 @@ struct OptionMut<'a> {
 }
 
 impl<'a> Options<'a> {
-    fn new(opts: &'a [u8]) -> Self {
+    // NOTE: Caller must ensure that `are_valid` returns `true` before using this as an iterator
+    unsafe fn new(opts: &'a [u8]) -> Self {
         Options { opts }
     }
 
@@ -685,13 +692,15 @@ impl<'a> Iterator for Options<'a> {
         if self.opts.is_empty() {
             None
         } else {
-            let ty = OptionType::from(self.opts[0]);
-            let len = 8 * usize::from(self.opts[1]);
-            let contents = &self.opts[2..len];
+            unsafe {
+                let ty = OptionType::from(*self.opts.gu(0));
+                let len = 8 * usize::from(*self.opts.gu(1));
+                let contents = self.opts.r(2..len);
 
-            self.opts = &self.opts[len..];
+                self.opts = self.opts.rf(len..);
 
-            Some(OptionRef { ty, contents })
+                Some(OptionRef { ty, contents })
+            }
         }
     }
 }
