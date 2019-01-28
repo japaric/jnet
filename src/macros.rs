@@ -27,7 +27,7 @@ macro_rules! code {
             }
         }
 
-        impl ::core::convert::TryFrom<Code> for $Enum {
+        impl crate::traits::TryFrom<Code> for $Enum {
             type Error = ();
 
             fn try_from(c: Code) -> Result<$Enum, ()> {

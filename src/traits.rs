@@ -173,3 +173,25 @@ impl UxxExt for u32 {
         (self >> 16) as u16
     }
 }
+
+pub trait TryFrom<T>: Sized {
+    type Error;
+
+    fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+
+pub trait TryInto<T> {
+    type Error;
+    fn try_into(self) -> Result<T, Self::Error>;
+}
+
+impl<T, U> TryInto<U> for T
+where
+    U: TryFrom<T>,
+{
+    type Error = U::Error;
+
+    fn try_into(self) -> Result<U, U::Error> {
+        U::try_from(self)
+    }
+}

@@ -6,15 +6,13 @@
 //!
 //! [rfc]: https://tools.ietf.org/html/rfc7252
 
-use core::{
-    convert::TryFrom, fmt, marker::PhantomData, ops::Range, option::Option as CoreOption, str,
-};
+use core::{fmt, marker::PhantomData, ops::Range, option::Option as CoreOption, str};
 
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u8, usize};
 
-use crate::traits::{Resize, UncheckedIndex};
+use crate::traits::{Resize, TryFrom, UncheckedIndex};
 
 /// CoAP default UDP port
 pub const PORT: u16 = 5683;

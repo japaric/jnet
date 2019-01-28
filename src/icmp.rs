@@ -6,7 +6,6 @@
 //!
 //! [rfc]: https://tools.ietf.org/html/rfc792
 
-use core::convert::{TryFrom, TryInto};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Range, RangeFrom};
@@ -15,7 +14,12 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::usize;
 
-use crate::{fmt::Hex, ipv4, traits::UncheckedIndex, Invalid, Resize, Unknown, Valid};
+use crate::{
+    fmt::Hex,
+    ipv4,
+    traits::{TryFrom, TryInto, UncheckedIndex},
+    Invalid, Resize, Unknown, Valid,
+};
 
 /* Packet structure */
 const TYPE: usize = 0;

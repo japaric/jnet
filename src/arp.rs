@@ -6,7 +6,6 @@
 //!
 //! [rfc]: https://tools.ietf.org/html/rfc826
 
-use core::convert::{TryFrom, TryInto};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Range, RangeFrom};
@@ -15,7 +14,11 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use crate::{ether, ipv4, mac, traits::UncheckedIndex, Resize, Unknown};
+use crate::{
+    ether, ipv4, mac,
+    traits::{TryFrom, TryInto, UncheckedIndex},
+    Resize, Unknown,
+};
 
 /* Packet structure */
 const HTYPE: Range<usize> = 0..2;
@@ -229,7 +232,7 @@ where
     /* Miscellaneous */
     /// Interprets this packet as `Packet<Ethernet, Ipv4>`
     pub fn downcast(self) -> Result<Packet<B>, Self> {
-        self.try_into()
+        TryInto::try_into(self)
     }
 }
 
