@@ -111,12 +111,17 @@ pub mod ether;
 pub mod ieee802154;
 pub mod mac;
 
-// Network layer
 pub mod arp;
+
+// Network layer
 pub mod ipv4;
+pub mod ipv6;
+// pub mod sixlowpan;
+
+pub mod icmp;
+// pub mod icmp6;
 
 // Transport layer
-pub mod icmp;
 pub mod udp;
 
 // Application layer
