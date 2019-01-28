@@ -76,11 +76,11 @@
 //!     ip.set_destination(IP_DST);
 //!     ip.udp(|udp| {
 //!         udp.set_destination(coap::PORT);
-//!         udp.coap(0, |coap| {
+//!         udp.coap(0, |mut coap| {
 //!             coap.set_type(coap::Type::Confirmable);
 //!             coap.set_code(coap::Method::Put);
 //!             coap.add_option(coap::OptionNumber::UriPath, b"led");
-//!             coap.set_payload(b"on");
+//!             coap.set_payload(b"on")
 //!         })
 //!     });
 //! });

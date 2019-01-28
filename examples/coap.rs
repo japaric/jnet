@@ -110,7 +110,7 @@ fn main() -> Result<(), Error> {
             mtx.add_option(coap::OptionNumber::UriPath, segment.as_bytes());
         }
     }
-    mtx.set_payload(
+    let mtx = mtx.set_payload(
         matches
             .value_of("payload")
             .map(|s| s.as_bytes())

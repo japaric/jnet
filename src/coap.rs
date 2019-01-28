@@ -6,16 +6,15 @@
 //!
 //! [rfc]: https://tools.ietf.org/html/rfc7252
 
-use core::convert::TryFrom;
-use core::ops::Range;
-use core::option::Option as CoreOption;
-use core::{fmt, str};
+use core::{
+    convert::TryFrom, fmt, marker::PhantomData, ops::Range, option::Option as CoreOption, str,
+};
 
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u8, usize};
 
-use crate::traits::Resize;
+use crate::traits::{Resize, UncheckedIndex};
 
 /// CoAP default UDP port
 pub const PORT: u16 = 5683;
@@ -95,28 +94,174 @@ const LENGTH16: u8 = 14;
 // NOTE Invariants
 // - Options are always valid. For example, this means that the reserved bit pattern (0b1111)
 //   doesn't appear in the Option Length nibble. It also means that options are not truncated so
-//   they'll always be terminated by the `PAYLOAD_MARKER`.
-// XXX Should we encode the integrity of the payload in the type signature? Adding a new option
-// reduces the size of the payload and discards its first bytes; clearing the existing options adds
-// bytes to the start of the payload
-pub struct Message<BUFFER>
+//   they'll always be terminated by the `PAYLOAD_MARKER`, if there's a payload, or by the end of
+//   the slice, if there's no payload.
+pub struct Message<BUFFER, PAYLOAD = Set>
 where
     BUFFER: AsSlice<Element = u8>,
+    PAYLOAD: 'static,
 {
+    _payload: PhantomData<PAYLOAD>,
     buffer: BUFFER,
     // Position of the `PAYLOAD_MARKER`. Cached to avoid traversing the options (O(N) runtime) when
-    // the payload is requested. An index outside the buffer indicates that the message has no
-    // payload.
-    // TODO use the value `0` to indicate that there is no payload and no payload marker
-    payload_marker: u16,
+    // the payload is requested. `NO_PAYLOAD` indicates that there is no payload
+    // When PAYLOAD is `Unset` this is used to track where the marker *would be*, but that spot in
+    // the buffer is not yet set to `PAYLOAD_MARKER`
+    marker: u16,
     /// Highest option number stored in the Options field
     number: u16,
 }
 
-impl<B> Message<B>
+// Special value
+const NO_PAYLOAD: u16 = 0;
+
+/// Payload has been set
+pub enum Set {}
+
+/// Payload has not been set yet
+pub enum Unset {}
+
+impl<B, P> Message<B, P>
 where
     B: AsSlice<Element = u8>,
 {
+    /* Getters */
+    /// Returns the Version field of the header
+    ///
+    /// As per RFC 7252 this always returns 1
+    pub fn get_version(&self) -> u8 {
+        unsafe { get!(self.as_slice().gu(VER_T_TKL), ver) }
+    }
+
+    /// Returns the Type field of the header
+    pub fn get_type(&self) -> Type {
+        unsafe { Type::from(get!(self.as_slice().gu(VER_T_TKL), t)) }
+    }
+
+    /// Returns the Token Length (TKL) field of the header
+    ///
+    /// As per RFC 7252 this always returns a value in the range `0..=8`
+    pub fn get_token_length(&self) -> u8 {
+        unsafe { get!(self.as_slice().gu(VER_T_TKL), tkl) }
+    }
+
+    /// Returns the Code field of the header
+    pub fn get_code(&self) -> Code {
+        unsafe { Code(*self.as_slice().gu(CODE)) }
+    }
+
+    /// Returns the Message ID field of the header
+    pub fn get_message_id(&self) -> u16 {
+        unsafe { NE::read_u16(self.as_slice().r(MESSAGE_ID)) }
+    }
+
+    /// View into the Token field of the header
+    pub fn token(&self) -> &[u8] {
+        let start = TOKEN_START;
+        let end = start + self.get_token_length() as usize;
+        unsafe { self.as_slice().r(start..end) }
+    }
+
+    /// Returns the byte representation of this message
+    pub fn as_bytes(&self) -> &[u8] {
+        if typeid!(P == Unset) {
+            unsafe { self.buffer.as_slice().rt(..usize(self.marker)) }
+        } else {
+            self.buffer.as_slice()
+        }
+    }
+
+    /// Returns the length (header + data) of the CoAP message
+    pub fn len(&self) -> u16 {
+        u16(self.as_bytes().len()).unwrap()
+    }
+
+    /// Returns an iterator over the options of this message
+    pub fn options(&self) -> Options {
+        let end = if self.marker != NO_PAYLOAD {
+            usize(self.marker)
+        } else {
+            self.as_slice().len()
+        };
+
+        Options {
+            number: 0,
+            ptr: unsafe { self.as_slice().r(usize(self.options_start())..end) },
+        }
+    }
+
+    /* Private */
+    fn as_slice(&self) -> &[u8] {
+        self.buffer.as_slice()
+    }
+
+    /// Returns the index at which the options start
+    fn options_start(&self) -> u16 {
+        HEADER_SIZE + u16(self.get_token_length())
+    }
+
+    unsafe fn unchecked(buffer: B) -> Self {
+        Message {
+            _payload: PhantomData,
+            buffer,
+            marker: NO_PAYLOAD,
+            number: 0,
+        }
+    }
+}
+
+impl<B, P> Message<B, P>
+where
+    B: AsMutSlice<Element = u8>,
+{
+    /* Setters */
+    /// Sets the Code field of the header
+    pub fn set_code<C>(&mut self, code: C)
+    where
+        C: Into<Code>,
+    {
+        self.as_mut_slice()[CODE] = code.into().0;
+    }
+
+    /// Sets the Message ID field of the header
+    pub fn set_message_id(&mut self, id: u16) {
+        NE::write_u16(&mut self.as_mut_slice()[MESSAGE_ID], id)
+    }
+
+    /// Sets the Type field of the header
+    pub fn set_type(&mut self, ty: Type) {
+        let ty: u8 = ty.into();
+        set!(self.as_mut_slice()[VER_T_TKL], t, ty);
+    }
+
+    /// Mutable view into the Token field
+    pub fn token_mut(&mut self) -> &mut [u8] {
+        let start = TOKEN_START;
+        let end = start + self.get_token_length() as usize;
+        &mut self.as_mut_slice()[start..end]
+    }
+
+    /* Private */
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.buffer.as_mut_slice()
+    }
+
+    unsafe fn set_token_length(&mut self, tkl: u8) {
+        debug_assert!(tkl <= 8);
+
+        set!(self.as_mut_slice()[VER_T_TKL], tkl, tkl);
+    }
+
+    unsafe fn set_version(&mut self, ver: u8) {
+        set!(self.as_mut_slice()[VER_T_TKL], ver, ver);
+    }
+}
+
+impl<B> Message<B, Set>
+where
+    B: AsSlice<Element = u8>,
+{
+    /* Public constructors */
     /// Parses bytes into a CoAP message
     pub fn parse(bytes: B) -> Result<Self, B> {
         let len = bytes.as_slice().len();
@@ -126,33 +271,34 @@ where
             return Err(bytes);
         }
 
-        let m = unsafe { Message::unchecked(bytes) };
+        let m = unsafe { Message::<B, Set>::unchecked(bytes) };
         let tkl = m.get_token_length();
         let bytes = m.buffer;
 
         let opts_start = HEADER_SIZE + u16(tkl);
         if len < usize(opts_start) {
-            // smaller than header + token + PAYLOAD_MARKER
+            // smaller than header + token
             return Err(bytes);
         }
 
         // Scans the slice for options
         //
         // Returns the highest option number and the index of the PAYLOAD_MARKER
-        fn scan(bytes: &[u8]) -> Result<(u16, u16), ()> {
+        fn scan(bytes: &[u8]) -> Result<(u16, CoreOption<u16>), ()> {
             let len = bytes.len();
             let mut cursor = 0;
             let mut number = 0;
 
-            loop {
+            let marker = loop {
                 let head = *match bytes.as_slice().get(usize(cursor)) {
                     Some(b) => b,
-                    None => break,
+                    // end of packet -- no payload marker was found
+                    None => break None,
                 };
 
                 if head == PAYLOAD_MARKER {
                     // end of options
-                    break;
+                    break Some(cursor);
                 }
                 cursor += 1;
 
@@ -169,8 +315,11 @@ where
                         return Err(());
                     }
 
-                    let halfword =
-                        NE::read_u16(&bytes.as_slice()[usize(cursor)..usize(cursor + 2)]);
+                    let halfword = unsafe {
+                        NE::read_u16(
+                            &*(bytes.as_slice().as_ptr().add(usize(cursor)) as *const [u8; 2]),
+                        )
+                    };
                     cursor += 2;
 
                     number += halfword + OFFSET16;
@@ -190,8 +339,11 @@ where
                         return Err(());
                     }
 
-                    let halfword =
-                        NE::read_u16(&bytes.as_slice()[usize(cursor)..usize(cursor + 2)]);
+                    let halfword = unsafe {
+                        NE::read_u16(
+                            &*(bytes.as_slice().as_ptr().add(usize(cursor)) as *const [u8; 2]),
+                        )
+                    };
                     cursor += 2;
 
                     cursor += halfword + OFFSET16;
@@ -200,121 +352,51 @@ where
                 } else {
                     cursor += u16(len4);
                 }
-            }
+            };
 
-            Ok((number, cursor))
+            Ok((number, marker))
         }
 
-        if let Ok((number, cursor)) = scan(&bytes.as_slice()[usize(opts_start)..]) {
+        if let Ok((number, marker)) = unsafe { scan(bytes.as_slice().rf(usize(opts_start)..)) } {
             Ok(Message {
+                _payload: PhantomData,
                 buffer: bytes,
                 number,
-                payload_marker: opts_start + cursor,
+                marker: marker.unwrap_or(NO_PAYLOAD),
             })
         } else {
             Err(bytes)
         }
     }
 
-    /* Getters */
-    /// Returns the Version field of the header
-    ///
-    /// As per RFC 7252 this always returns 1
-    pub fn get_version(&self) -> u8 {
-        get!(self.as_slice()[VER_T_TKL], ver)
-    }
-
-    /// Returns the Type field of the header
-    pub fn get_type(&self) -> Type {
-        Type::from(get!(self.as_slice()[VER_T_TKL], t))
-    }
-
-    /// Returns the Token Length (TKL) field of the header
-    ///
-    /// As per RFC 7252 this always returns a value in the range `0..=8`
-    pub fn get_token_length(&self) -> u8 {
-        get!(self.as_slice()[VER_T_TKL], tkl)
-    }
-
-    /// Returns the Code field of the header
-    pub fn get_code(&self) -> Code {
-        Code(self.as_slice()[CODE])
-    }
-
-    /// Returns the Message ID field of the header
-    pub fn get_message_id(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[MESSAGE_ID])
-    }
-
-    /// View into the Token field of the header
-    pub fn token(&self) -> &[u8] {
-        let start = TOKEN_START;
-        let end = start + self.get_token_length() as usize;
-        &self.as_slice()[start..end]
-    }
-
-    /// Returns an iterator over the options of this message
-    pub fn options(&self) -> Options {
-        Options {
-            number: 0,
-            ptr: &self.as_slice()[usize(self.options_start())..usize(self.payload_marker)],
-        }
-    }
-
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        if usize(self.payload_marker) >= self.as_slice().len() {
+        if self.marker == NO_PAYLOAD {
             &[]
         } else {
-            &self.as_slice()[usize(self.payload_marker + 1)..]
-        }
-    }
-
-    /// Returns the length (header + data) of the CoAP message
-    pub fn len(&self) -> u16 {
-        u16(self.as_bytes().len()).unwrap()
-    }
-
-    /// Returns the byte representation of this message
-    pub fn as_bytes(&self) -> &[u8] {
-        self.buffer.as_slice()
-    }
-
-    /* Private */
-    fn as_slice(&self) -> &[u8] {
-        self.buffer.as_slice()
-    }
-
-    /// Returns the index at which the options start
-    fn options_start(&self) -> u16 {
-        HEADER_SIZE + u16(self.get_token_length())
-    }
-
-    fn payload_len(&self) -> u16 {
-        let payload_marker = usize(self.payload_marker);
-
-        if self.as_slice().len() <= payload_marker {
-            return 0;
-        }
-
-        // sanity check
-        debug_assert_eq!(self.as_slice()[payload_marker], PAYLOAD_MARKER);
-
-        u16(self.as_slice().len() - payload_marker - 1).unwrap()
-    }
-
-    unsafe fn unchecked(buffer: B) -> Self {
-        Message {
-            buffer,
-            payload_marker: 0,
-            number: 0,
+            unsafe { &self.as_slice().rf(usize(self.marker + 1)..) }
         }
     }
 }
 
-impl<B> Message<B>
+impl<B> Message<B, Set>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
+    B: AsMutSlice<Element = u8>,
+{
+    /// Mutable view into the payload
+    pub fn payload_mut(&mut self) -> &mut [u8] {
+        if self.marker == NO_PAYLOAD {
+            &mut []
+        } else {
+            let start = self.marker + 1;
+            unsafe { self.as_mut_slice().rfm(usize(start)..) }
+        }
+    }
+}
+
+impl<B> Message<B, Unset>
+where
+    B: AsMutSlice<Element = u8>,
 {
     /* Constructors */
     /// Transforms the given buffer into a CoAP message
@@ -335,20 +417,18 @@ where
     pub fn new(buffer: B, token_length: u8) -> Self {
         assert!(token_length <= 8);
         let len = buffer.as_slice().len();
-        let payload_marker = HEADER_SIZE + u16(token_length);
-        assert!(len >= usize(payload_marker) + 1 /* PAYLOAD_MARKER*/);
+        let marker = HEADER_SIZE + u16(token_length);
+        assert!(len >= usize(marker));
 
         unsafe {
             let mut m = Message::unchecked(buffer);
             m.set_version(1);
             m.set_token_length(token_length);
-            m.as_mut_slice()[usize(payload_marker)] = PAYLOAD_MARKER;
-            m.payload_marker = payload_marker;
+            m.marker = marker;
             m
         }
     }
 
-    /* Setters */
     /// Adds an option to this message
     ///
     /// *HEADS UP* This method will cause the first bytes of the payload to be lost
@@ -359,7 +439,6 @@ where
     ///
     /// - if `number` is smaller than the highest option number already contained in the message
     /// - if there's no space in the message to add the option
-    // FIXME this is a footgun because it changes the payload
     pub fn add_option(&mut self, number: OptionNumber, value: &[u8]) {
         /// Number of bytes required to encode `x`
         fn nbytes(x: u16) -> u16 {
@@ -376,22 +455,18 @@ where
         let nr: u16 = number.into();
         let delta = nr.checked_sub(self.number).unwrap();
 
-        // encoding this option uses up bytes from the payload; this assert ensures we don't go
-        // beyond the boundary of the payload
         let len = u16(value.len()).unwrap();
         let sz = 1 + nbytes(delta) + nbytes(len) + len;
-        assert!(self.payload().len() >= usize(sz));
 
-        let start = usize(self.payload_marker);
+        let start = usize(self.marker);
         let mut cursor = start + 1;
 
         // update the cached highest number
         self.number = nr;
 
         // move the payload marker
-        self.payload_marker += sz;
-        let end = usize(self.payload_marker);
-        self.as_mut_slice()[end] = PAYLOAD_MARKER;
+        self.marker += sz;
+        let end = usize(self.marker);
 
         // fill in the delta
         if delta < OFFSET8 {
@@ -427,102 +502,103 @@ where
     }
 
     /// Removes all the options this message has
-    // FIXME this is a footgun because it changes the payload
     pub fn clear_options(&mut self) {
-        let start = self.options_start();
         self.number = 0;
-        self.payload_marker = start;
-        self.as_mut_slice()[usize(start)] = PAYLOAD_MARKER;
-    }
-
-    /// Mutable view into the Token field
-    pub fn token_mut(&mut self) -> &mut [u8] {
-        let start = TOKEN_START;
-        let end = start + self.get_token_length() as usize;
-        &mut self.as_mut_slice()[start..end]
-    }
-
-    /// Mutable view into the payload
-    pub fn payload_mut(&mut self) -> &mut [u8] {
-        let start = self.payload_marker + 1;
-
-        &mut self.as_mut_slice()[usize(start)..]
-    }
-
-    /// Sets the Code field of the header
-    pub fn set_code<C>(&mut self, code: C)
-    where
-        C: Into<Code>,
-    {
-        self.as_mut_slice()[CODE] = code.into().0;
-    }
-
-    /// Sets the Message ID field of the header
-    pub fn set_message_id(&mut self, id: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[MESSAGE_ID], id)
-    }
-
-    /// Sets the Type field of the header
-    pub fn set_type(&mut self, ty: Type) {
-        let ty: u8 = ty.into();
-        set!(self.as_mut_slice()[VER_T_TKL], t, ty);
-    }
-
-    /* Private */
-    fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.buffer.as_mut_slice()
-    }
-
-    unsafe fn set_token_length(&mut self, tkl: u8) {
-        debug_assert!(tkl <= 8);
-
-        set!(self.as_mut_slice()[VER_T_TKL], tkl, tkl);
-    }
-
-    unsafe fn set_version(&mut self, ver: u8) {
-        set!(self.as_mut_slice()[VER_T_TKL], ver, ver);
+        self.marker = self.options_start();
     }
 }
 
-impl<B> Message<B>
+impl<B> Message<B, Unset>
 where
-    B: AsSlice<Element = u8> + Resize,
+    B: AsMutSlice<Element = u8> + Resize,
 {
-    /// Truncates the *payload* to the specified length
-    pub fn truncate(&mut self, len: u16) {
-        let old_len = self.payload_len();
-        let start = self.payload_marker;
+    /// Fills the payload with the given data and adjusts the length of the CoAP message
+    pub fn set_payload(mut self, data: &[u8]) -> Message<B> {
+        let mut start = self.marker;
+        let len = if !data.is_empty() {
+            // add `PAYLOAD_MARKER`
+            self.buffer.as_mut_slice()[usize(start)] = PAYLOAD_MARKER;
+            start += 1;
 
-        if len < old_len {
-            self.buffer.truncate(start + len + 1)
+            // now add the payload
+            let end = start + u16(data.len()).unwrap();
+            self.buffer.as_mut_slice()[usize(start)..usize(end)].copy_from_slice(data);
+            end
+        } else {
+            self.marker = NO_PAYLOAD;
+            start
+        };
+
+        // finally, resize the buffer
+        self.buffer.truncate(len);
+
+        Message {
+            _payload: PhantomData,
+            buffer: self.buffer,
+            marker: self.marker,
+            number: self.number,
         }
     }
 }
 
-impl<B> Message<B>
-where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
-{
-    /// Fills the payload with the given data and adjusts the length of the CoAP message
-    pub fn set_payload(&mut self, data: &[u8]) {
-        let len = u16(data.len()).unwrap();
-        assert!(self.payload_len() >= len);
+// impl<B> Message<B>
+// where
+//     B: AsSlice<Element = u8>,
+// {
+//     /* Private */
+//     fn payload_len(&self) -> u16 {
+//         self.payload_marker
+//             .map(|pos| {
+//                 // sanity check
+//                 debug_assert_eq!(self.as_slice()[pos], PAYLOAD_MARKER);
 
-        self.truncate(len);
-        self.payload_mut().copy_from_slice(data);
-    }
-}
+//                 u16(self.as_slice().len() - pos - 1).unwrap()
+//             })
+//             .unwrap_or(0)
+//     }
 
-impl<B> fmt::Debug for Message<B>
+// }
+
+// impl<B> Message<B>
+// where
+//     B: AsSlice<Element = u8> + Resize,
+// {
+//     /// Truncates the *payload* to the specified length
+//     pub fn truncate(&mut self, len: u16) {
+//         let old_len = self.payload_len();
+//         let start = self.payload_marker;
+
+//         if len < old_len {
+//             self.buffer.truncate(start + len + 1)
+//         }
+//     }
+// }
+
+// impl<B> Message<B>
+// where
+//     B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+// {
+//     /// Fills the payload with the given data and adjusts the length of the CoAP message
+//     pub fn set_payload(&mut self, data: &[u8]) {
+//         let len = u16(data.len()).unwrap();
+//         assert!(self.payload_len() >= len);
+
+//         self.truncate(len);
+//         self.payload_mut().copy_from_slice(data);
+//     }
+// }
+
+impl<B, P> fmt::Debug for Message<B, P>
 where
     B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Adapter to format the `Options` iterator as a map
-        struct Options<'a, B>(&'a Message<B>)
+        struct Options<'a, B, P>(&'a Message<B, P>)
         where
-            B: AsSlice<Element = u8> + 'a;
-        impl<'a, B> fmt::Debug for Options<'a, B>
+            B: AsSlice<Element = u8> + 'a,
+            P: 'static;
+        impl<'a, B, P> fmt::Debug for Options<'a, B, P>
         where
             B: AsSlice<Element = u8>,
         {
@@ -575,12 +651,15 @@ where
             s.field("options", &Options(self));
         }
 
-        let payload = self.payload();
-        if payload.len() != 0 {
-            if let Ok(p) = str::from_utf8(payload) {
-                s.field("payload", &p);
-            } else {
-                s.field("payload", &payload);
+        if typeid!(P == Set) {
+            if self.marker != NO_PAYLOAD {
+                let payload = unsafe { &self.as_slice().rf(usize(self.marker + 1)..) };
+
+                if let Ok(p) = str::from_utf8(payload) {
+                    s.field("payload", &p);
+                } else {
+                    s.field("payload", &payload);
+                }
             }
         }
 
@@ -619,21 +698,21 @@ struct PtrReader<'a>(&'a [u8]);
 impl<'a> PtrReader<'a> {
     fn try_read_u8(&mut self) -> ::core::option::Option<u8> {
         if self.0.len() > 0 {
-            Some(self.read_u8())
+            Some(unsafe { self.read_u8() })
         } else {
             None
         }
     }
 
-    fn read_u8(&mut self) -> u8 {
-        let byte = self.0[0];
-        self.0 = &self.0[1..];
+    unsafe fn read_u8(&mut self) -> u8 {
+        let byte = *self.0.gu(0);
+        self.0 = self.0.rf(1..);
         byte
     }
 
-    fn read_u16(&mut self) -> u16 {
-        let halfword = NE::read_u16(&self.0[..2]);
-        self.0 = &self.0[2..];
+    unsafe fn read_u16(&mut self) -> u16 {
+        let halfword = NE::read_u16(self.0.rt(..2));
+        self.0 = self.0.rf(2..);
         halfword
     }
 }
@@ -656,24 +735,24 @@ impl<'a> Iterator for Options<'a> {
             debug_assert!(len4 != RESERVED);
 
             self.number += if delta4 == DELTA8 {
-                u16(ptr.read_u8()) + OFFSET8
+                u16(unsafe { ptr.read_u8() }) + OFFSET8
             } else if delta4 == DELTA16 {
-                ptr.read_u16() + OFFSET16
+                unsafe { ptr.read_u16() + OFFSET16 }
             } else {
                 u16(delta4)
             };
 
             let len = if len4 == LENGTH8 {
-                u16(ptr.read_u8()) + OFFSET8
+                u16(unsafe { ptr.read_u8() }) + OFFSET8
             } else if len4 == LENGTH16 {
-                ptr.read_u16() + OFFSET16
+                unsafe { ptr.read_u16() + OFFSET16 }
             } else {
                 u16(len4)
             };
 
             // move pointer by `len` for the next iteration
-            let value = &ptr.0[..usize(len)];
-            self.ptr = &ptr.0[usize(len)..];
+            let value = unsafe { ptr.0.rt(..usize(len)) };
+            self.ptr = unsafe { ptr.0.rf(usize(len)..) };
 
             Some(Option {
                 number: self.number,
@@ -951,13 +1030,30 @@ mod tests {
 
     #[test]
     fn new() {
-        const SZ: u16 = 128;
+        const SZ: usize = super::TOKEN_START;
 
-        let mut chunk = [0; SZ as usize];
+        let mut chunk = [0; SZ];
         let buf = Buffer::new(&mut chunk);
 
         let coap = coap::Message::new(buf, 0);
-        assert_eq!(coap.len(), SZ);
+        assert_eq!(usize(coap.len()), SZ);
+        let m = coap.set_payload(&[]);
+        assert_eq!(m.payload(), &[]);
+        assert_eq!(usize(m.len()), SZ);
+    }
+
+    #[test]
+    fn new_payload() {
+        const BYTE: u8 = 42;
+        const SZ: usize = super::TOKEN_START + 1 /* PAYLOAD_MARKER */ + 1 /* BYTE */;
+
+        let mut chunk = [0; SZ];
+        let buf = Buffer::new(&mut chunk);
+
+        let coap = coap::Message::new(buf, 0);
+        let m = coap.set_payload(&[BYTE]);
+        assert_eq!(m.payload(), &[BYTE]);
+        assert_eq!(usize(m.len()), SZ);
     }
 
     #[test]
