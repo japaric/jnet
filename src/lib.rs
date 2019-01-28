@@ -106,15 +106,20 @@ mod macros;
 mod fmt;
 mod traits;
 
+// Medium Access Control layer
 pub mod ether;
+pub mod ieee802154;
 pub mod mac;
 
+// Network layer
 pub mod arp;
 pub mod ipv4;
 
+// Transport layer
 pub mod icmp;
 pub mod udp;
 
+// Application layer
 pub mod coap;
 
 /// [Type State] Unknown
