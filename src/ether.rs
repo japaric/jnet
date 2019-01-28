@@ -6,8 +6,9 @@ use core::ops::{Range, RangeFrom};
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
+use owning_slice::{IntoSliceFrom, Truncate};
 
-use crate::{arp, ipv4, mac, traits::UncheckedIndex, Invalid, Resize};
+use crate::{arp, ipv4, mac, traits::UncheckedIndex, Invalid};
 
 /* Frame format */
 const DESTINATION: Range<usize> = 0..6;
@@ -136,24 +137,27 @@ where
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + Truncate<u16>,
 {
     /// Truncates the *payload* of this frame to the specified length
     pub fn truncate(&mut self, len: u16) {
         self.buffer.truncate(len + HEADER_SIZE);
     }
+}
 
+impl<B> Frame<B>
+where
+    B: AsSlice<Element = u8> + IntoSliceFrom<u16>,
+{
     /// Returns the payload of this frame
-    pub fn into_payload(self) -> B {
-        let mut buffer = self.buffer;
-        buffer.slice_from(HEADER_SIZE);
-        buffer
+    pub fn into_payload(self) -> B::OutputF {
+        self.buffer.into_slice_from(HEADER_SIZE)
     }
 }
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /// Fills the payload with an ARP packet
     ///
@@ -225,14 +229,14 @@ full_range!(
 
 #[cfg(test)]
 mod tests {
-    use crate::{ether, Buffer};
+    use crate::ether;
 
     #[test]
     fn new() {
         const SZ: u16 = 128;
 
         let mut chunk = [0; SZ as usize];
-        let buf = Buffer::new(&mut chunk);
+        let buf = &mut chunk;
 
         let eth = ether::Frame::new(buf);
         assert_eq!(eth.len(), SZ);

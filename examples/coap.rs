@@ -7,14 +7,16 @@ extern crate jnet;
 extern crate rand;
 extern crate url;
 
-use std::io::{self, Write};
-use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
-use std::str;
-use std::time::{Duration, Instant};
+use std::{
+    io::{self, Write},
+    net::{Ipv4Addr, SocketAddrV4, UdpSocket},
+    str,
+    time::{Duration, Instant},
+};
 
 use clap::{App, Arg};
 use failure::{Error, ResultExt};
-use jnet::{coap, Buffer};
+use jnet::coap;
 use rand::Rng;
 use url::{Host, Url};
 
@@ -99,7 +101,7 @@ fn main() -> Result<(), Error> {
 
     // construct outgoing message
     let mut buf = [0; 128];
-    let tx_buf = Buffer::new(&mut buf);
+    let tx_buf = &mut buf[..];
     let mut mtx = coap::Message::new(tx_buf, 0);
     mtx.set_type(coap::Type::Confirmable);
     let mid = 0;

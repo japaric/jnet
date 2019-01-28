@@ -2,8 +2,6 @@ use core::ops::{Range, RangeFrom, RangeTo};
 #[cfg(not(debug_assertions))]
 use core::slice;
 
-use cast::usize;
-
 /// IMPLEMENTATION DETAIL
 pub trait UncheckedIndex {
     type T;
@@ -101,43 +99,6 @@ impl<T> UncheckedIndex for [T] {
         let o = r.start;
         let l = self.len() - o;
         slice::from_raw_parts_mut(self.as_mut_ptr().add(o), l)
-    }
-}
-
-/// A buffer that can be resized in place
-pub trait Resize {
-    /// Slices the buffer in place
-    fn slice_from(&mut self, offset: u16);
-
-    /// Truncates the buffer to the specified length
-    fn truncate(&mut self, len: u16);
-}
-
-impl<'a> Resize for &'a [u8] {
-    fn slice_from(&mut self, offset: u16) {
-        *self = unsafe { self.rf(usize(offset)..) };
-    }
-
-    fn truncate(&mut self, len: u16) {
-        let len = usize(len);
-        if self.len() > len {
-            *self = unsafe { self.rt(..len) };
-        }
-    }
-}
-
-impl<'a> Resize for &'a mut [u8] {
-    fn slice_from(&mut self, offset: u16) {
-        // NOTE(unsafe) side step borrow checker complaints
-        *self = unsafe { &mut *(self.rfm(usize(offset)..) as *mut [u8]) };
-    }
-
-    fn truncate(&mut self, len: u16) {
-        let old = self.len();
-        let len = usize(len);
-        if old > len {
-            *self = unsafe { &mut *(self.rtm(..usize(len)) as *mut [u8]) };
-        }
     }
 }
 

@@ -55,7 +55,7 @@
 //! oversized buffer and then proceed to shrink it to the right length.
 //!
 //! ```
-//! use jnet::{Buffer, coap, ether, ipv4, mac, udp};
+//! use jnet::{coap, ether, ipv4, mac, udp};
 //!
 //! const MAC_SRC: mac::Addr = mac::Addr([0x20, 0x18, 0x03, 0x01, 0x00, 0x00]);
 //! const MAC_DST: mac::Addr = mac::Addr([0x20, 0x18, 0x03, 0x13, 0x00, 0x00]);
@@ -64,7 +64,7 @@
 //! const IP_DST: ipv4::Addr = ipv4::Addr([192, 168, 1, 33]);
 //!
 //! let mut bytes = [0; 60];
-//! let mut buf = Buffer::new(&mut bytes);
+//! let mut buf = &mut bytes[..];
 //!
 //! // clean slate Ethernet frame with a total length of 60 bytes
 //! let mut eth = ether::Frame::new(buf);
@@ -103,9 +103,6 @@ extern crate pretty_assertions;
 #[macro_use]
 mod macros;
 
-pub use crate::{buf::Buffer, traits::Resize};
-
-mod buf;
 mod fmt;
 mod traits;
 

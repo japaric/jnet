@@ -9,9 +9,14 @@ main() {
     cargo check --target $TARGET
 
     if [ $TARGET = x86_64-unknown-linux-gnu ]; then
+        pushd owning-slice
+        cargo test --target $TARGET
+        cargo test --target $TARGET --release
+        popd
+
         cargo check --target $TARGET --examples
         cargo test --target $TARGET
-        return
+        cargo test --target $TARGET --release
     elif [ $TARGET = thumbv7m-none-eabi ]; then
         ( cd panic-never && cargo build --examples --release )
     fi
