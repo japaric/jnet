@@ -383,7 +383,7 @@ full_range!(
 
 #[cfg(test)]
 mod tests {
-    use rand::{self, Rng};
+    use rand::{self, RngCore};
 
     use crate::{ether, icmp, ipv4, mac};
 

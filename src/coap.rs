@@ -1020,7 +1020,7 @@ full_range!(
 #[cfg(test)]
 mod tests {
     use cast::usize;
-    use rand::{self, Rng};
+    use rand::{self, Rng, RngCore};
 
     use crate::coap;
 

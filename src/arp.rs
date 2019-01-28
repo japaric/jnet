@@ -470,7 +470,7 @@ full_range!(
 
 #[cfg(test)]
 mod tests {
-    use rand::{self, Rng};
+    use rand::{self, RngCore};
 
     use crate::{arp, ether, ipv4, mac};
 

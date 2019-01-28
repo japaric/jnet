@@ -22,8 +22,5 @@ default-features = false
 version = "0.2.2"
 
 [dev-dependencies]
-clap = "2.31.1"
-failure = "0.1.1"
 pretty_assertions = "0.5.0"
-rand = "0.4.2"
-url = "1.7.0"
+rand = "0.6.5"

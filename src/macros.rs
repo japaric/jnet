@@ -44,6 +44,7 @@ macro_rules! code {
 
 /// Enum whose variants cover the full range of the integer type `$uxx`
 macro_rules! full_range {
+    // Public
     ($uxx:ty,
         $(#[$enum_attr:meta])*
         pub enum $Enum:ident {
@@ -84,7 +85,48 @@ macro_rules! full_range {
                 }
             }
         }
-    }
+    };
+
+    // Private
+    ($uxx:ty,
+     $(#[$enum_attr:meta])*
+     enum $Enum:ident {
+         $(
+             $Variant:ident = $value:expr,
+         )+
+     }
+    ) => {
+        $(#[$enum_attr])*
+        enum $Enum {
+            $(
+                $Variant,
+            )+
+            /// Unknown
+                Unknown($uxx),
+        }
+
+        impl From<$uxx> for $Enum {
+            fn from(n: $uxx) -> $Enum {
+                match n {
+                    $(
+                        $value => $Enum::$Variant,
+                    )+
+                        _ => $Enum::Unknown(n),
+                }
+            }
+        }
+
+        impl From<$Enum> for $uxx {
+            fn from(e: $Enum) -> $uxx {
+                match e {
+                    $(
+                        $Enum::$Variant => $value,
+                    )+
+                        $Enum::Unknown(n) => n,
+                }
+            }
+        }
+    };
 }
 
 #[cfg(debug_assertions)]

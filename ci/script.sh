@@ -12,9 +12,20 @@ main() {
         cargo test -p owning-slice --target $TARGET
         cargo test -p owning-slice --target $TARGET --release
 
-        cargo check --target $TARGET --examples
         cargo test --target $TARGET
         cargo test --target $TARGET --release
+
+        pushd tools
+        cargo check --target $TARGET --bins
+        popd
+
+        if [ $TRAVIS_RUST_VERSION = nightly ]; then
+            export RUSTFLAGS="-Z sanitizer=address"
+            # export ASAN_OPTIONS="detect_odr_violation=0"
+
+            cargo test --target $TARGET --lib
+            cargo test --target $TARGET --lib --release
+        fi
     elif [ $TARGET = thumbv7m-none-eabi ]; then
         ( cd panic-never && cargo build --examples --release )
     fi
@@ -23,6 +34,20 @@ main() {
 # fake Travis variables to be able to run this on a local machine
 if [ -z ${TRAVIS_BRANCH-} ]; then
     TRAVIS_BRANCH=auto
+fi
+
+if [ -z ${TRAVIS_RUST_VERSION-} ]; then
+    case $(rustc -V) in
+        *nightly*)
+            TRAVIS_RUST_VERSION=nightly
+            ;;
+        *beta*)
+            TRAVIS_RUST_VERSION=beta
+            ;;
+        *)
+            TRAVIS_RUST_VERSION=stable
+            ;;
+    esac
 fi
 
 if [ -z ${TARGET-} ]; then
