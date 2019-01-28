@@ -216,7 +216,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::{self, Rng};
+    use rand::{self, RngCore};
 
     use crate::{ether, ipv4, mac, udp};
 

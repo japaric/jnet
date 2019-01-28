@@ -12,9 +12,12 @@ main() {
         cargo test -p owning-slice --target $TARGET
         cargo test -p owning-slice --target $TARGET --release
 
-        cargo check --target $TARGET --examples
         cargo test --target $TARGET
         cargo test --target $TARGET --release
+
+        pushd tools
+        cargo check --target $TARGET --bins
+        popd
 
         if [ $TRAVIS_RUST_VERSION = nightly ]; then
             export RUSTFLAGS="-Z sanitizer=address"

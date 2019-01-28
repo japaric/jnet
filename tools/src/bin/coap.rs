@@ -1,11 +1,7 @@
-//! Very simple CoAP client
+//! Very simple IPv4 CoAP client
 
-extern crate clap;
-#[macro_use]
-extern crate failure;
-extern crate jnet;
-extern crate rand;
-extern crate url;
+#![deny(rust_2018_compatibility)]
+#![deny(rust_2018_idioms)]
 
 use std::{
     io::{self, Write},
@@ -15,12 +11,16 @@ use std::{
 };
 
 use clap::{App, Arg};
-use failure::{Error, ResultExt};
+use failure::{bail, Error, ResultExt};
 use jnet::coap;
-use rand::Rng;
+use rand::{
+    distributions::{Distribution, Uniform},
+    Rng,
+};
 use url::{Host, Url};
 
 /* Transmission parameters */
+const ACK_RANDOM_FACTOR: f64 = 1.5;
 const ACK_TIMEOUT: u16 = 2_000; // ms
 const MAX_RETRANSMIT: u8 = 4;
 
@@ -124,8 +124,8 @@ fn main() -> Result<(), Error> {
     let mut stdout = stdout.lock();
     let mut stderr = stderr.lock();
     let mut rx_buf = [0; 128];
-    let mut timeout =
-        Duration::from_millis(((1. + rng.next_f64() / 2.) * ACK_TIMEOUT as f64) as u64);
+    let between = Uniform::new(1.0, ACK_RANDOM_FACTOR);
+    let mut timeout = Duration::from_millis((between.sample(&mut rng) * ACK_TIMEOUT as f64) as u64);
 
     let port = url.port().unwrap_or(coap::PORT);
     let server = SocketAddrV4::new(ip, port);

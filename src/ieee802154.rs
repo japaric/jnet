@@ -852,7 +852,7 @@ impl From<ExtendedAddr> for Addr {
 
 #[cfg(test)]
 mod tests {
-    use rand::{self, Rng};
+    use rand::{self, RngCore};
 
     use super::{Addr, ExtendedAddr, Frame, PanId, ShortAddr, SrcDest, Type};
 
