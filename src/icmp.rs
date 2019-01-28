@@ -15,7 +15,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::usize;
 
-use crate::{fmt::Hex, ipv4, Invalid, Resize, Unknown, Valid};
+use crate::{fmt::Hex, ipv4, traits::UncheckedIndex, Invalid, Resize, Unknown, Valid};
 
 /* Packet structure */
 const TYPE: usize = 0;
@@ -80,12 +80,12 @@ where
     /* Getters */
     /// Returns the Identifier field of the header
     pub fn get_identifier(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[IDENT])
+        unsafe { NE::read_u16(&self.as_slice().r(IDENT)) }
     }
 
     /// Returns the Identifier field of the header
     pub fn get_sequence_number(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[SEQ_NO])
+        unsafe { NE::read_u16(&self.as_slice().r(SEQ_NO)) }
     }
 }
 
@@ -241,7 +241,7 @@ where
         } else if typeid!(T == EchoRequest) {
             Type::EchoRequest
         } else {
-            self.as_slice()[TYPE].into()
+            unsafe { self.as_slice().gu(TYPE).clone().into() }
         }
     }
 
@@ -252,13 +252,13 @@ where
         } else if typeid!(T == EchoRequest) {
             0
         } else {
-            self.as_slice()[CODE]
+            unsafe { self.as_slice().gu(CODE).clone() }
         }
     }
 
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[PAYLOAD]
+        unsafe { &self.as_slice().rf(PAYLOAD) }
     }
 
     /// Returns the length (header + data) of this packet
