@@ -3,7 +3,7 @@ use core::u16;
 use as_slice::{AsMutSlice, AsSlice};
 use cast::{u16, usize};
 
-use traits::Resize;
+use crate::traits::Resize;
 
 /// Buffer that owns a (statically sized) chunk of memory and provides a slice view into it
 ///

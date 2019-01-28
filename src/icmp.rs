@@ -15,9 +15,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::usize;
 
-use fmt::Hex;
-use ipv4;
-use {Invalid, Resize, Unknown, Valid};
+use crate::{fmt::Hex, ipv4, Invalid, Resize, Unknown, Valid};
 
 /* Packet structure */
 const TYPE: usize = 0;
@@ -383,8 +381,7 @@ full_range!(
 mod tests {
     use rand::{self, Rng};
 
-    use Buffer;
-    use {ether, icmp, ipv4, mac};
+    use crate::{ether, icmp, ipv4, mac, Buffer};
 
     const SIZE: usize = 42;
 

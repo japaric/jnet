@@ -15,7 +15,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u8, usize};
 
-use traits::Resize;
+use crate::traits::Resize;
 
 /// CoAP default UDP port
 pub const PORT: u16 = 5683;
@@ -944,7 +944,7 @@ mod tests {
     use cast::usize;
     use rand::{self, Rng};
 
-    use {coap, Buffer};
+    use crate::{coap, Buffer};
 
     const URI_HOST: &[u8] = b"www.example.org";
     const URI_PORT: &[u8] = &[22, 51]; // 5683

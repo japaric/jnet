@@ -7,7 +7,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use {coap, Resize};
+use crate::{coap, Resize};
 
 /* Packet structure */
 const SOURCE: Range<usize> = 0..2;
@@ -215,7 +215,7 @@ where
 mod tests {
     use rand::{self, Rng};
 
-    use {ether, ipv4, mac, udp, Buffer};
+    use crate::{ether, ipv4, mac, udp, Buffer};
 
     const SIZE: usize = 56;
 

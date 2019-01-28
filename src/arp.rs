@@ -15,9 +15,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use traits::UncheckedIndex;
-use {ether, ipv4, mac};
-use {Resize, Unknown};
+use crate::{ether, ipv4, mac, traits::UncheckedIndex, Resize, Unknown};
 
 /* Packet structure */
 const HTYPE: Range<usize> = 0..2;
@@ -470,8 +468,7 @@ full_range!(
 mod tests {
     use rand::{self, Rng};
 
-    use Buffer;
-    use {arp, ether, ipv4, mac};
+    use crate::{arp, ether, ipv4, mac, Buffer};
 
     const SIZE: usize = 46;
 

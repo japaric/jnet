@@ -2,6 +2,8 @@
 
 use core::fmt;
 
+use hash32_derive::Hash32;
+
 /// MAC address
 #[derive(Clone, Copy, Eq, Hash32, PartialEq)]
 pub struct Addr(pub [u8; 6]);
