@@ -7,8 +7,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use {arp, ipv4, mac};
-use {Invalid, Resize};
+use crate::{arp, ipv4, mac, Invalid, Resize};
 
 /* Frame format */
 const DESTINATION: Range<usize> = 0..6;
@@ -226,7 +225,7 @@ full_range!(
 
 #[cfg(test)]
 mod tests {
-    use {ether, Buffer};
+    use crate::{ether, Buffer};
 
     #[test]
     fn new() {

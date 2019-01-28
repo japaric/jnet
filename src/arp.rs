@@ -15,8 +15,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use {ether, ipv4, mac};
-use {Resize, Unknown};
+use crate::{ether, ipv4, mac, traits::UncheckedIndex, Resize, Unknown};
 
 /* Packet structure */
 const HTYPE: Range<usize> = 0..2;
@@ -200,7 +199,7 @@ where
     pub fn get_sha(&self) -> &[u8] {
         let end = usize(self.get_hlen());
 
-        &self.payload()[..end]
+        unsafe { self.payload().rt(..end) }
     }
 
     /// Returns the SPA (Sender Protocol Address) field of the payload
@@ -208,7 +207,7 @@ where
         let start = usize(self.get_hlen());
         let end = start + usize(self.get_plen());
 
-        &self.payload()[start..end]
+        unsafe { self.payload().r(start..end) }
     }
 
     /// Returns the THA (Target Hardware Address) field of the payload
@@ -216,7 +215,7 @@ where
         let start = usize(self.get_hlen()) + usize(self.get_plen());
         let end = start + usize(self.get_hlen());
 
-        &self.payload()[start..end]
+        unsafe { self.payload().r(start..end) }
     }
 
     /// Returns the TPA (Target Protocol Address) field of the payload
@@ -224,7 +223,7 @@ where
         let start = 2 * usize(self.get_hlen()) + usize(self.get_plen());
         let end = start + usize(self.get_plen());
 
-        &self.payload()[start..end]
+        unsafe { self.payload().r(start..end) }
     }
 
     /* Miscellaneous */
@@ -469,8 +468,7 @@ full_range!(
 mod tests {
     use rand::{self, Rng};
 
-    use Buffer;
-    use {arp, ether, ipv4, mac};
+    use crate::{arp, ether, ipv4, mac, Buffer};
 
     const SIZE: usize = 46;
 

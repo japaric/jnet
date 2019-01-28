@@ -1,6 +1,7 @@
 [package]
 authors = ["Jorge Aparicio <jorge@japaric.io>"]
 description = "JNeT: japaric's network thingies"
+edition = "2018"
 license = "MIT OR Apache-2.0"
 name = "jnet"
 repository = "https://github.com/japaric/jnet"

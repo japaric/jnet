@@ -13,11 +13,14 @@ use core::{fmt, u16};
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u32, usize};
+use hash32_derive::Hash32;
 
-use fmt::Hex;
-use traits::{Resize, UncheckedIndex, UxxExt};
-use {icmp, udp};
-use {Invalid, Valid};
+use crate::{
+    fmt::Hex,
+    icmp,
+    traits::{Resize, UncheckedIndex, UxxExt},
+    udp, Invalid, Valid,
+};
 
 /* Packet structure */
 const VERSION_IHL: usize = 0;
@@ -696,7 +699,7 @@ pub(crate) fn verify_checksum(header: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use {ipv4, Buffer};
+    use crate::{ipv4, Buffer};
 
     #[test]
     fn checksum() {

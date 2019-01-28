@@ -91,27 +91,18 @@
 //! ```
 
 #![deny(missing_docs)]
-// #![deny(warnings)]
+#![deny(warnings)]
 #![feature(try_from)]
 #![no_std]
-
-extern crate byteorder;
-extern crate cast;
-#[macro_use]
-extern crate hash32_derive;
-#[cfg(test)]
-extern crate rand;
 
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-extern crate as_slice;
 
 #[macro_use]
 mod macros;
 
-pub use buf::Buffer;
-pub use traits::Resize;
+pub use crate::{buf::Buffer, traits::Resize};
 
 mod buf;
 mod fmt;
