@@ -8,16 +8,17 @@ use core::mem::MaybeUninit;
 use cortex_m_rt::{entry, exception};
 use panic_never::force_eval;
 
-use jnet::ether;
+use jnet::{icmp, Unknown, Valid};
 
 const LEN: usize = 128;
 static mut BUFFER: [u8; LEN] = [0; LEN];
-static mut FRAME: MaybeUninit<ether::Frame<&'static mut [u8]>> = MaybeUninit::uninitialized();
+static mut PACKET: MaybeUninit<icmp::Packet<&'static mut [u8], Unknown, Valid>> =
+    MaybeUninit::uninitialized();
 
 #[exception]
 unsafe fn SysTick() {
-    if let Ok(f) = ether::Frame::parse(&mut BUFFER[..]) {
-        FRAME.set(f);
+    if let Ok(p) = icmp::Packet::parse(&mut BUFFER[..]) {
+        PACKET.set(p);
     } else {
         asm!("NOP" : : : : "volatile");
     }
@@ -25,12 +26,12 @@ unsafe fn SysTick() {
 
 #[exception]
 unsafe fn SVCall() {
-    let f = FRAME.get_mut();
+    let p = PACKET.get_mut();
 
-    force_eval!(f.get_destination());
-    force_eval!(f.get_source());
-    force_eval!(f.get_type());
-    force_eval!(f.payload());
+    force_eval!(p.get_type());
+    force_eval!(p.get_code());
+    force_eval!(p.payload());
+    force_eval!(p.len());
 }
 
 #[entry]

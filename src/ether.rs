@@ -7,7 +7,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use crate::{arp, ipv4, mac, Invalid, Resize};
+use crate::{arp, ipv4, mac, traits::UncheckedIndex, Invalid, Resize};
 
 /* Frame format */
 const DESTINATION: Range<usize> = 0..6;
@@ -72,12 +72,12 @@ where
 
     /// Returns the Type field of the header
     pub fn get_type(&self) -> Type {
-        NE::read_u16(&self.as_slice()[TYPE]).into()
+        unsafe { NE::read_u16(&self.as_slice().r(TYPE)).into() }
     }
 
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[PAYLOAD]
+        unsafe { &self.as_slice().rf(PAYLOAD) }
     }
 
     /* Miscellaneous */
