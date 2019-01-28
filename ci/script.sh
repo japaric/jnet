@@ -9,10 +9,8 @@ main() {
     cargo check --target $TARGET
 
     if [ $TARGET = x86_64-unknown-linux-gnu ]; then
-        pushd owning-slice
-        cargo test --target $TARGET
-        cargo test --target $TARGET --release
-        popd
+        cargo test -p owning-slice --target $TARGET
+        cargo test -p owning-slice --target $TARGET --release
 
         cargo check --target $TARGET --examples
         cargo test --target $TARGET

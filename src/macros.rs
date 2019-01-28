@@ -87,6 +87,20 @@ macro_rules! full_range {
     }
 }
 
+#[cfg(debug_assertions)]
+macro_rules! debug_unreachable {
+    () => {
+        unreachable!()
+    };
+}
+
+#[cfg(not(debug_assertions))]
+macro_rules! debug_unreachable {
+    () => {
+        core::hint::unreachable_unchecked()
+    };
+}
+
 /// Reads the bitfield of a byte / word
 macro_rules! get {
     ($byte:expr, $field:ident) => {
