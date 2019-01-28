@@ -5,7 +5,7 @@ use core::fmt;
 pub struct Display<T>(pub T);
 
 impl<T> fmt::Debug for Display<T>
-    where
+where
     T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -24,7 +24,7 @@ impl fmt::Debug for Hex {
 pub struct Quoted<T>(pub T);
 
 impl<T> fmt::Debug for Quoted<T>
-    where
+where
     T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
