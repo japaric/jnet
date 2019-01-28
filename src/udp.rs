@@ -7,7 +7,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use crate::{coap, Resize};
+use crate::{coap, traits::UncheckedIndex, Resize};
 
 /* Packet structure */
 const SOURCE: Range<usize> = 0..2;
@@ -52,21 +52,21 @@ where
     /* Getters */
     /// Returns the Source (port) field of the header
     pub fn get_source(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[SOURCE])
+        unsafe { NE::read_u16(&self.as_slice().r(SOURCE)) }
     }
 
     /// Returns the Destination (port) field of the header
     pub fn get_destination(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[DESTINATION])
+        unsafe { NE::read_u16(&self.as_slice().r(DESTINATION)) }
     }
 
     /// Returns the Length field of the header
     pub fn get_length(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[LENGTH])
+        unsafe { NE::read_u16(&self.as_slice().r(LENGTH)) }
     }
 
     fn get_checksum(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[CHECKSUM])
+        unsafe { NE::read_u16(&self.as_slice().r(CHECKSUM)) }
     }
 
     /// Returns the length (header + data) of this packet
@@ -77,7 +77,7 @@ where
     /* Miscellaneous */
     /// View into the payload
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[PAYLOAD]
+        unsafe { self.as_slice().rf(PAYLOAD) }
     }
 
     /// Returns the byte representation of this UDP packet
