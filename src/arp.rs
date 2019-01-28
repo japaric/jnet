@@ -412,7 +412,7 @@ impl<B> fmt::Debug for Packet<B, Ethernet, Ipv4>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("arp::Packet")
             .field("oper", &self.get_oper())
             .field("sha", &self.get_sha())
@@ -427,7 +427,7 @@ impl<B> fmt::Debug for Packet<B, Unknown, Unknown>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("arp::Packet")
             .field("htype", &self.get_htype())
             .field("ptype", &self.get_ptype())

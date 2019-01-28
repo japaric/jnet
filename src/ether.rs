@@ -199,7 +199,7 @@ impl<B> fmt::Debug for Frame<B>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ether::Frame")
             .field("destination", &self.get_destination())
             .field("source", &self.get_source())

@@ -592,7 +592,7 @@ impl<B, C> fmt::Debug for Packet<B, C>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ipv4::Packet")
             .field("version", &self.get_version())
             .field("ihl", &self.get_ihl())
@@ -626,13 +626,13 @@ impl Addr {
 }
 
 impl fmt::Debug for Addr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("ipv4::Addr").field(&self.0).finish()
     }
 }
 
 impl fmt::Display for Addr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use core::fmt::Write;
 
         let mut is_first = true;

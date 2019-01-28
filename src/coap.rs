@@ -177,7 +177,7 @@ where
     }
 
     /// Returns an iterator over the options of this message
-    pub fn options(&self) -> Options {
+    pub fn options(&self) -> Options<'_> {
         let end = if self.marker != NO_PAYLOAD {
             usize(self.marker)
         } else {
@@ -592,17 +592,17 @@ impl<B, P> fmt::Debug for Message<B, P>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Adapter to format the `Options` iterator as a map
         struct Options<'a, B, P>(&'a Message<B, P>)
         where
-            B: AsSlice<Element = u8> + 'a,
+            B: AsSlice<Element = u8>,
             P: 'static;
         impl<'a, B, P> fmt::Debug for Options<'a, B, P>
         where
             B: AsSlice<Element = u8>,
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let mut m = f.debug_map();
                 for opt in self.0.options() {
                     if let Ok(s) = str::from_utf8(opt.value()) {
@@ -623,7 +623,7 @@ where
         where
             T: fmt::Debug,
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "{}{:?}", self.0, self.1)
             }
         }
@@ -836,7 +836,7 @@ impl Code {
     /// Checks if this is a reponse code
     pub fn is_response(&self) -> bool {
         match self.class() {
-            2...5 => true,
+            2..=5 => true,
             _ => false,
         }
     }
@@ -852,13 +852,13 @@ impl Code {
 }
 
 impl fmt::Debug for Code {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Code(0b{:03b}_{:05b})", self.class(), self.detail())
     }
 }
 
 impl fmt::Display for Code {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{:02}", self.class(), self.detail())
     }
 }

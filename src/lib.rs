@@ -91,6 +91,8 @@
 //! ```
 
 #![deny(missing_docs)]
+#![deny(rust_2018_compatibility)]
+#![deny(rust_2018_idioms)]
 #![deny(warnings)]
 #![feature(try_from)]
 #![no_std]
