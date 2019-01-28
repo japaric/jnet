@@ -7,7 +7,11 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use crate::{coap, traits::UncheckedIndex, Resize};
+use crate::{
+    coap::{self, Unset},
+    traits::UncheckedIndex,
+    Resize,
+};
 
 /* Packet structure */
 const SOURCE: Range<usize> = 0..2;
@@ -175,12 +179,11 @@ where
     /// Fills the payload with a CoAP message
     pub fn coap<F>(&mut self, token_length: u8, f: F)
     where
-        F: FnOnce(&mut coap::Message<&mut [u8]>),
+        F: FnOnce(coap::Message<&mut [u8], Unset>) -> coap::Message<&mut [u8]>,
     {
         let len = {
-            let mut coap = coap::Message::new(self.payload_mut(), token_length);
-            f(&mut coap);
-            coap.len()
+            let m = coap::Message::new(self.payload_mut(), token_length);
+            f(m).len()
         };
         self.truncate(len);
     }
