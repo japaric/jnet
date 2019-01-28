@@ -356,11 +356,11 @@ where
     /// Fills the payload with an Echo Request ICMP packet
     pub fn echo_request<F>(&mut self, f: F)
     where
-        F: FnOnce(&mut icmp::Packet<&mut [u8], icmp::EchoRequest, Invalid>),
+        F: FnOnce(&mut icmp::Message<&mut [u8], icmp::EchoRequest, Invalid>),
     {
         self.set_protocol(Protocol::Icmp);
         let len = {
-            let mut icmp = icmp::Packet::new(self.payload_mut());
+            let mut icmp = icmp::Message::new(self.payload_mut());
             f(&mut icmp);
             icmp.update_checksum().len()
         };

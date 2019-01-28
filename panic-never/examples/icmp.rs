@@ -9,12 +9,12 @@ use jnet::{icmp, Unknown, Valid};
 
 const LEN: usize = 128;
 static mut BUFFER: [u8; LEN] = [0; LEN];
-static mut PACKET: Option<icmp::Packet<&'static mut [u8], Unknown, Valid>> = None;
+static mut MESSAGE: Option<icmp::Message<&'static mut [u8], Unknown, Valid>> = None;
 
 #[exception]
 unsafe fn SysTick() {
-    if let Ok(p) = icmp::Packet::parse(&mut BUFFER[..]) {
-        PACKET = Some(p);
+    if let Ok(m) = icmp::Message::parse(&mut BUFFER[..]) {
+        MESSAGE = Some(m);
     } else {
         asm::nop();
     }
@@ -22,11 +22,11 @@ unsafe fn SysTick() {
 
 #[exception]
 unsafe fn SVCall() {
-    if let Some(p) = PACKET.take() {
-        force_eval!(p.get_type());
-        force_eval!(p.get_code());
-        force_eval!(p.payload());
-        force_eval!(p.len());
+    if let Some(m) = MESSAGE.take() {
+        force_eval!(m.get_type());
+        force_eval!(m.get_code());
+        force_eval!(m.payload());
+        force_eval!(m.len());
     }
 }
 
