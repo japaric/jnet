@@ -119,7 +119,7 @@ pub mod ipv6;
 // pub mod sixlowpan;
 
 pub mod icmp;
-// pub mod icmp6;
+pub mod icmpv6;
 
 // Transport layer
 pub mod udp;
