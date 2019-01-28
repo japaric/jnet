@@ -1,0 +1,12 @@
+[package]
+authors = ["Jorge Aparicio <jorge@japaric.io>"]
+edition = "2018"
+name = "owning-slice"
+version = "0.1.0"
+
+[dependencies]
+as-slice = "0.1.0"
+
+[dependencies.stable_deref_trait]
+default-features = false
+version = "1.1.1"

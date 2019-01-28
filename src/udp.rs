@@ -6,11 +6,11 @@ use core::{fmt, u16};
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
+use owning_slice::Truncate;
 
 use crate::{
     coap::{self, Unset},
     traits::UncheckedIndex,
-    Resize,
 };
 
 /* Packet structure */
@@ -142,7 +142,7 @@ where
 
 impl<B> Packet<B>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /* Constructors */
     /// Transforms the given buffer into an UDP packet
@@ -218,7 +218,7 @@ where
 mod tests {
     use rand::{self, Rng};
 
-    use crate::{ether, ipv4, mac, udp, Buffer};
+    use crate::{ether, ipv4, mac, udp};
 
     const SIZE: usize = 56;
 
@@ -259,7 +259,7 @@ mod tests {
         let mut array: [u8; SIZE] = [0; SIZE];
         rand::thread_rng().fill_bytes(&mut array);
 
-        let mut eth = ether::Frame::new(Buffer::new(&mut array));
+        let mut eth = ether::Frame::new(&mut array[..]);
 
         eth.set_destination(MAC_DST);
         eth.set_source(MAC_SRC);
@@ -283,7 +283,7 @@ mod tests {
         const SZ: u16 = 128;
 
         let mut chunk = [0; SZ as usize];
-        let buf = Buffer::new(&mut chunk);
+        let buf = &mut chunk[..];
 
         let udp = udp::Packet::new(buf);
         assert_eq!(udp.len(), SZ);

@@ -14,11 +14,12 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u32, usize};
 use hash32_derive::Hash32;
+use owning_slice::{IntoSliceFrom, Truncate};
 
 use crate::{
     fmt::Hex,
     icmp,
-    traits::{Resize, UncheckedIndex, UxxExt},
+    traits::{UncheckedIndex, UxxExt},
     udp, Invalid, Valid,
 };
 
@@ -94,7 +95,7 @@ where
 
 impl<B> Packet<B, Valid>
 where
-    B: AsSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + Truncate<u16>,
 {
     /* Constructors */
     /// Parses bytes into an IPv4 packet
@@ -275,21 +276,19 @@ where
 
 impl<B, C> Packet<B, C>
 where
-    B: AsSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + IntoSliceFrom<u16>,
 {
     /* Miscellaneous */
     /// Returns the payload of this frame
-    pub fn into_payload(self) -> B {
+    pub fn into_payload(self) -> B::OutputF {
         let offset = u16(self.header_len());
-        let mut buffer = self.buffer;
-        buffer.slice_from(offset);
-        buffer
+        self.buffer.into_slice_from(offset)
     }
 }
 
 impl<B> Packet<B, Invalid>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /* Constructors */
     /// Transforms the given buffer into an IPv4 packet
@@ -394,7 +393,7 @@ where
 
 impl<B> Packet<B, Valid>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /// Truncates the *payload* to the specified length
     pub fn truncate(self, len: u16) -> Packet<B, Invalid> {
@@ -699,7 +698,7 @@ pub(crate) fn verify_checksum(header: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ipv4, Buffer};
+    use crate::ipv4;
 
     #[test]
     fn checksum() {
@@ -719,7 +718,7 @@ mod tests {
         const SZ: u16 = 128;
 
         let mut chunk = [0; SZ as usize];
-        let buf = Buffer::new(&mut chunk);
+        let buf = &mut chunk[..];
 
         let ip = ipv4::Packet::new(buf);
         assert_eq!(ip.len(), SZ);

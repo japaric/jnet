@@ -11,6 +11,7 @@ version = "0.1.0"
 hash32 = "0.1.0"
 hash32-derive = "0.1.0"
 as-slice = "0.1.0"
+owning-slice = { path = "owning-slice" }
 
 [dependencies.byteorder]
 default-features = false

@@ -13,11 +13,12 @@ use core::ops::{Range, RangeFrom};
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
+use owning_slice::Truncate;
 
 use crate::{
     ether, ipv4, mac,
     traits::{TryFrom, TryInto, UncheckedIndex},
-    Resize, Unknown,
+    Unknown,
 };
 
 /* Packet structure */
@@ -58,7 +59,7 @@ where
 /* Ethernet - Ipv4 */
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /* Constructors */
     /// Transforms the given buffer into an ARP packet
@@ -238,7 +239,7 @@ where
 
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + Truncate<u16>,
 {
     /// Parses bytes into an ARP packet
     pub fn parse(bytes: B) -> Result<Self, B> {
@@ -471,7 +472,7 @@ full_range!(
 mod tests {
     use rand::{self, Rng};
 
-    use crate::{arp, ether, ipv4, mac, Buffer};
+    use crate::{arp, ether, ipv4, mac};
 
     const SIZE: usize = 46;
 
@@ -503,7 +504,7 @@ mod tests {
         let mut array: [u8; SIZE] = [0; SIZE];
         rand::thread_rng().fill_bytes(&mut array);
 
-        let mut eth = ether::Frame::new(Buffer::new(&mut array));
+        let mut eth = ether::Frame::new(&mut array[..]);
 
         eth.set_destination(mac::Addr::BROADCAST);
         eth.set_source(SENDER_MAC);

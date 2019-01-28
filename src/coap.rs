@@ -11,8 +11,9 @@ use core::{fmt, marker::PhantomData, ops::Range, option::Option as CoreOption, s
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, u8, usize};
+use owning_slice::Truncate;
 
-use crate::traits::{Resize, TryFrom, UncheckedIndex};
+use crate::traits::{TryFrom, UncheckedIndex};
 
 /// CoAP default UDP port
 pub const PORT: u16 = 5683;
@@ -508,7 +509,7 @@ where
 
 impl<B> Message<B, Unset>
 where
-    B: AsMutSlice<Element = u8> + Resize,
+    B: AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /// Fills the payload with the given data and adjusts the length of the CoAP message
     pub fn set_payload(mut self, data: &[u8]) -> Message<B> {
@@ -1021,7 +1022,7 @@ mod tests {
     use cast::usize;
     use rand::{self, Rng};
 
-    use crate::{coap, Buffer};
+    use crate::coap;
 
     const URI_HOST: &[u8] = b"www.example.org";
     const URI_PORT: &[u8] = &[22, 51]; // 5683
@@ -1031,7 +1032,7 @@ mod tests {
         const SZ: usize = super::TOKEN_START;
 
         let mut chunk = [0; SZ];
-        let buf = Buffer::new(&mut chunk);
+        let buf = &mut chunk[..];
 
         let coap = coap::Message::new(buf, 0);
         assert_eq!(usize(coap.len()), SZ);
@@ -1046,7 +1047,7 @@ mod tests {
         const SZ: usize = super::TOKEN_START + 1 /* PAYLOAD_MARKER */ + 1 /* BYTE */;
 
         let mut chunk = [0; SZ];
-        let buf = Buffer::new(&mut chunk);
+        let buf = &mut chunk[..];
 
         let coap = coap::Message::new(buf, 0);
         let m = coap.set_payload(&[BYTE]);

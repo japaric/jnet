@@ -18,7 +18,7 @@ use crate::{
     fmt::Hex,
     ipv4,
     traits::{TryFrom, TryInto, UncheckedIndex},
-    Invalid, Resize, Unknown, Valid,
+    Invalid, Unknown, Valid,
 };
 
 /* Packet structure */
@@ -59,7 +59,7 @@ unsafe impl Echo for EchoRequest {}
 /* EchoRequest */
 impl<B> Packet<B, EchoRequest, Invalid>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Constructors */
     /// Transforms the input buffer into a Echo Request ICMP packet
@@ -113,7 +113,7 @@ where
 /* Unknown */
 impl<B> Packet<B, Unknown, Valid>
 where
-    B: AsSlice<Element = u8> + Resize,
+    B: AsSlice<Element = u8>,
 {
     /* Constructors */
     /// Parses the input bytes into a
@@ -385,7 +385,7 @@ full_range!(
 mod tests {
     use rand::{self, Rng};
 
-    use crate::{ether, icmp, ipv4, mac, Buffer};
+    use crate::{ether, icmp, ipv4, mac};
 
     const SIZE: usize = 42;
 
@@ -422,7 +422,7 @@ mod tests {
         let mut array: [u8; SIZE] = [0; SIZE];
         rand::thread_rng().fill_bytes(&mut array);
 
-        let mut eth = ether::Frame::new(Buffer::new(&mut array));
+        let mut eth = ether::Frame::new(&mut array[..]);
 
         eth.set_destination(MAC_DST);
         eth.set_source(MAC_SRC);
