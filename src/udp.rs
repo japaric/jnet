@@ -203,7 +203,7 @@ impl<B> fmt::Debug for Packet<B>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("udp::Packet")
             .field("source", &self.get_source())
             .field("destination", &self.get_destination())

@@ -1,7 +1,8 @@
 #![no_std]
-#![feature(asm)]
 
 use core::panic::PanicInfo;
+
+use cortex_m::asm;
 
 #[macro_export]
 macro_rules! force_eval {
@@ -26,6 +27,6 @@ fn panic(_: &PanicInfo) -> ! {
 #[inline(never)]
 fn nop() -> ! {
     loop {
-        unsafe { asm!("NOP"::::"volatile") }
+        asm::nop();
     }
 }

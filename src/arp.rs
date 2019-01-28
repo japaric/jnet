@@ -6,7 +6,6 @@
 //!
 //! [rfc]: https://tools.ietf.org/html/rfc826
 
-use core::convert::{TryFrom, TryInto};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Range, RangeFrom};
@@ -15,7 +14,11 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 
-use crate::{ether, ipv4, mac, traits::UncheckedIndex, Resize, Unknown};
+use crate::{
+    ether, ipv4, mac,
+    traits::{TryFrom, TryInto, UncheckedIndex},
+    Resize, Unknown,
+};
 
 /* Packet structure */
 const HTYPE: Range<usize> = 0..2;
@@ -229,7 +232,7 @@ where
     /* Miscellaneous */
     /// Interprets this packet as `Packet<Ethernet, Ipv4>`
     pub fn downcast(self) -> Result<Packet<B>, Self> {
-        self.try_into()
+        TryInto::try_into(self)
     }
 }
 
@@ -412,7 +415,7 @@ impl<B> fmt::Debug for Packet<B, Ethernet, Ipv4>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("arp::Packet")
             .field("oper", &self.get_oper())
             .field("sha", &self.get_sha())
@@ -427,7 +430,7 @@ impl<B> fmt::Debug for Packet<B, Unknown, Unknown>
 where
     B: AsSlice<Element = u8>,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("arp::Packet")
             .field("htype", &self.get_htype())
             .field("ptype", &self.get_ptype())

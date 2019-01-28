@@ -24,11 +24,11 @@ impl Addr {
 }
 
 impl fmt::Debug for Addr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         struct Hex<'a>(&'a [u8; 6]);
 
         impl<'a> fmt::Debug for Hex<'a> {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 use core::fmt::Write;
 
                 let mut is_first = true;
@@ -54,7 +54,7 @@ impl fmt::Debug for Addr {
 }
 
 impl fmt::Display for Addr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut is_first = true;
         for byte in &self.0 {
             if is_first {
