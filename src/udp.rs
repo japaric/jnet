@@ -21,7 +21,7 @@ const CHECKSUM: Range<usize> = 6..8;
 const PAYLOAD: RangeFrom<usize> = 8..;
 
 /// Size of the UDP header
-pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
+pub const HEADER_SIZE: u8 = PAYLOAD.start as u8;
 
 /// UDP packet
 pub struct Packet<BUFFER>
@@ -46,7 +46,7 @@ where
         let packet = Packet { buffer: bytes };
         let len = packet.get_length();
 
-        if len < HEADER_SIZE || usize(len) > nbytes {
+        if len < u16(HEADER_SIZE) || usize(len) > nbytes {
             Err(packet.buffer)
         } else {
             Ok(packet)
@@ -56,21 +56,21 @@ where
     /* Getters */
     /// Returns the Source (port) field of the header
     pub fn get_source(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(SOURCE)) }
+        NE::read_u16(&self.header_()[SOURCE])
     }
 
     /// Returns the Destination (port) field of the header
     pub fn get_destination(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(DESTINATION)) }
+        NE::read_u16(&self.header_()[DESTINATION])
     }
 
     /// Returns the Length field of the header
     pub fn get_length(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(LENGTH)) }
+        NE::read_u16(&self.header_()[LENGTH])
     }
 
     fn get_checksum(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(CHECKSUM)) }
+        NE::read_u16(&self.header_()[CHECKSUM])
     }
 
     /// Returns the length (header + data) of this packet
@@ -94,8 +94,14 @@ where
         self.buffer.as_slice()
     }
 
+    fn header_(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
+
     fn payload_len(&self) -> u16 {
-        self.get_length() - HEADER_SIZE
+        self.get_length() - u16(HEADER_SIZE)
     }
 }
 
@@ -106,16 +112,16 @@ where
     /* Setters */
     /// Sets the Source (port) field of the header
     pub fn set_source(&mut self, port: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[SOURCE], port)
+        NE::write_u16(&mut self.header_mut_()[SOURCE], port)
     }
 
     /// Sets the Destination (port) field of the header
     pub fn set_destination(&mut self, port: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[DESTINATION], port)
+        NE::write_u16(&mut self.header_mut_()[DESTINATION], port)
     }
 
     unsafe fn set_length(&mut self, len: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[LENGTH], len)
+        NE::write_u16(&mut self.header_mut_()[LENGTH], len)
     }
 
     /// Zeroes the Checksum field of the header
@@ -137,6 +143,12 @@ where
     /* Private */
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
+    }
+
+    fn header_mut_(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
     }
 }
 
@@ -191,7 +203,7 @@ where
     /// Truncates the *payload* to the specified length
     pub fn truncate(&mut self, len: u16) {
         if len < self.payload_len() {
-            let total_len = len + HEADER_SIZE;
+            let total_len = len + u16(HEADER_SIZE);
             self.buffer.truncate(total_len);
             unsafe { self.set_length(total_len) }
         }
@@ -216,6 +228,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use cast::u16;
     use rand::{self, RngCore};
 
     use crate::{ether, ipv4, mac, udp};
@@ -304,7 +317,10 @@ mod tests {
         let udp = udp::Packet::parse(ip.payload()).unwrap();
         assert_eq!(udp.get_source(), 0);
         assert_eq!(udp.get_destination(), UDP_DST);
-        assert_eq!(udp.get_length(), MESSAGE.len() as u16 + udp::HEADER_SIZE);
+        assert_eq!(
+            udp.get_length(),
+            MESSAGE.len() as u16 + u16(udp::HEADER_SIZE)
+        );
         assert_eq!(udp.payload(), MESSAGE);
     }
 }

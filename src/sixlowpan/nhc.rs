@@ -4,7 +4,7 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use owning_slice::Truncate;
 
-use crate::traits::UncheckedIndex;
+use crate::{ipv6, traits::UncheckedIndex};
 
 /* Header format */
 const NHC: usize = 0;
@@ -54,7 +54,7 @@ where
         let mut p = UdpPacket { buffer, payload: 0 };
 
         // check NHC ID
-        if get!(p.header(), id) != id::VALUE {
+        if get!(p.header_(), id) != id::VALUE {
             return Err(p.buffer);
         }
 
@@ -124,12 +124,12 @@ where
 
     /// Reads the 'Checksum' NHC field
     pub fn get_c(&self) -> bool {
-        get!(self.header(), c) != 0
+        get!(self.header_(), c) != 0
     }
 
     /// Reads the 'Ports' NHC field
     pub fn get_p(&self) -> u8 {
-        get!(self.header(), p)
+        get!(self.header_(), p)
     }
 
     /* Private */
@@ -147,7 +147,49 @@ where
         }
     }
 
-    fn header(&self) -> u8 {
+    fn compute_checksum(&self, src: ipv6::Addr, dest: ipv6::Addr) -> u16 {
+        const NEXT_HEADER: u8 = 17;
+
+        let mut sum: u32 = 0;
+
+        /* Pseudo-header */
+        for chunk in src.0.chunks(2).chain(dest.0.chunks(2)) {
+            sum += u32::from(NE::read_u16(chunk));
+        }
+
+        // length in pseudo-header
+        // XXX should this be just `as u16`?
+        let udp_len = self.payload().len() as u32 + 8;
+        sum += udp_len >> 16;
+        sum += udp_len & 0xffff;
+
+        sum += u32::from(NEXT_HEADER);
+
+        /* UDP packet */
+        sum += u32::from(self.get_source());
+        sum += u32::from(self.get_destination());
+
+        // length in UDP header (yes, again)
+        sum += udp_len >> 16;
+        sum += udp_len & 0xffff;
+
+        for chunk in self.payload().chunks(2) {
+            if chunk.len() == 2 {
+                sum += u32::from(NE::read_u16(chunk));
+            } else {
+                sum += u32::from(chunk[0]) << 8;
+            }
+        }
+
+        // fold carry-over
+        while sum >> 16 != 0 {
+            sum = (sum & 0xffff) + (sum >> 16);
+        }
+
+        !(sum as u16)
+    }
+
+    fn header_(&self) -> u8 {
         unsafe { *self.as_slice().gu(NHC) }
     }
 
@@ -219,20 +261,35 @@ where
         unsafe { self.as_mut_slice().rfm(start..) }
     }
 
+    /// Updates the checksum field, if not elided
+    pub fn update_checksum(&mut self, src: ipv6::Addr, dest: ipv6::Addr) {
+        if !self.get_c() {
+            let cksum = self.compute_checksum(src, dest);
+            unsafe { self.set_checksum(cksum) }
+        }
+    }
+
     /* Private */
     fn set_c(&mut self, c: u8) {
-        set!(*self.header_mut(), c, c)
+        set!(*self.header_mut_(), c, c)
     }
 
     fn set_p(&mut self, p: u8) {
-        set!(*self.header_mut(), p, p)
+        set!(*self.header_mut_(), p, p)
+    }
+
+    unsafe fn set_checksum(&mut self, cksum: u16) {
+        debug_assert!(!self.get_c());
+
+        let start = 1 + usize::from(self.ports_size());
+        NE::write_u16(self.as_mut_slice().rm(start..start + 2), cksum);
     }
 
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
     }
 
-    fn header_mut(&mut self) -> &mut u8 {
+    fn header_mut_(&mut self) -> &mut u8 {
         unsafe { self.as_mut_slice().gum(NHC) }
     }
 }

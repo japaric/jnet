@@ -1,7 +1,9 @@
 //! Ethernet II
 
-use core::fmt;
-use core::ops::{Range, RangeFrom};
+use core::{
+    fmt,
+    ops::{Range, RangeFrom},
+};
 
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
@@ -17,7 +19,7 @@ const TYPE: Range<usize> = 12..14;
 const PAYLOAD: RangeFrom<usize> = 14..;
 
 /// Size of the MAC header
-pub const HEADER_SIZE: u16 = TYPE.end as u16;
+pub const HEADER_SIZE: u8 = TYPE.end as u8;
 
 /// Layer 2 Ethernet frame
 ///
@@ -73,7 +75,7 @@ where
 
     /// Returns the Type field of the header
     pub fn get_type(&self) -> Type {
-        unsafe { NE::read_u16(&self.as_slice().r(TYPE)).into() }
+        NE::read_u16(&self.header_()[TYPE]).into()
     }
 
     /// View into the payload
@@ -101,6 +103,12 @@ where
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
     }
+
+    fn header_(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
 }
 
 impl<B> Frame<B>
@@ -110,17 +118,17 @@ where
     /* Setters */
     /// Sets the destination field of the header
     pub fn set_destination(&mut self, addr: mac::Addr) {
-        self.as_mut_slice()[DESTINATION].copy_from_slice(&addr.0)
+        self.header_mut_()[DESTINATION].copy_from_slice(&addr.0)
     }
 
     /// Sets the source field of the header
     pub fn set_source(&mut self, addr: mac::Addr) {
-        self.as_mut_slice()[SOURCE].copy_from_slice(&addr.0)
+        self.header_mut_()[SOURCE].copy_from_slice(&addr.0)
     }
 
     /// Sets the type field of the header
     pub fn set_type(&mut self, type_: Type) {
-        NE::write_u16(&mut self.as_mut_slice()[TYPE], type_.into())
+        NE::write_u16(&mut self.header_mut_()[TYPE], type_.into())
     }
 
     /* Miscellaneous */
@@ -133,15 +141,11 @@ where
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
     }
-}
 
-impl<B> Frame<B>
-where
-    B: AsSlice<Element = u8> + Truncate<u16>,
-{
-    /// Truncates the *payload* of this frame to the specified length
-    pub fn truncate(&mut self, len: u16) {
-        self.buffer.truncate(len + HEADER_SIZE);
+    fn header_mut_(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
     }
 }
 
@@ -151,13 +155,13 @@ where
 {
     /// Returns the payload of this frame
     pub fn into_payload(self) -> B::OutputF {
-        self.buffer.into_slice_from(HEADER_SIZE)
+        self.buffer.into_slice_from(u16(HEADER_SIZE))
     }
 }
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u8>,
 {
     /// Fills the payload with an ARP packet
     ///
@@ -177,9 +181,14 @@ where
             f(&mut arp);
             arp.len()
         };
-        self.truncate(len);
+        self.buffer.truncate(HEADER_SIZE + len);
     }
+}
 
+impl<B> Frame<B>
+where
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
+{
     /// Fills the payload with an IPv4 packet
     ///
     /// This method sets the Type field of this frame to IPv4, recomputes and updates the header
@@ -194,7 +203,7 @@ where
             f(&mut ip);
             ip.update_checksum().get_total_length()
         };
-        self.truncate(len);
+        self.buffer.truncate(u16(HEADER_SIZE) + len);
     }
 }
 

@@ -82,7 +82,7 @@ const SOURCE: Range<usize> = 12..16;
 const DESTINATION: Range<usize> = 16..20;
 
 /// Minimum size of the IPv4 header
-pub const MIN_HEADER_SIZE: u16 = DESTINATION.end as u16;
+pub const MIN_HEADER_SIZE: u8 = DESTINATION.end as u8;
 
 /// IPv4 packet
 pub struct Packet<BUFFER, CHECKSUM>
@@ -113,7 +113,7 @@ where
         let header_len = u16(packet.header_len());
         let total_len = packet.get_total_length();
 
-        if header_len < MIN_HEADER_SIZE {
+        if header_len < u16(MIN_HEADER_SIZE) {
             // IHL < 5
             Err(packet.buffer)
         } else if total_len < header_len {
@@ -142,27 +142,27 @@ where
     /* Getters */
     /// Returns the version field of the header
     pub fn get_version(&self) -> u8 {
-        unsafe { get!(*self.as_slice().gu(VERSION_IHL), version) }
+        get!(self.header_()[VERSION_IHL], version)
     }
 
     /// Returns the IHL (Internet Header Length) field of the header
     pub fn get_ihl(&self) -> u8 {
-        unsafe { get!(self.as_slice().gu(VERSION_IHL), ihl) }
+        get!(self.header_()[VERSION_IHL], ihl)
     }
 
     /// Returns the DSCP (Differentiated Services Code Point) field of the header
     pub fn get_dscp(&self) -> u8 {
-        unsafe { get!(self.as_slice().gu(DSCP_ECN), dscp) }
+        get!(self.header_()[DSCP_ECN], dscp)
     }
 
     /// Returns the ECN (Explicit Congestion Notification) field of the header
     pub fn get_ecn(&self) -> u8 {
-        unsafe { get!(self.as_slice().gu(DSCP_ECN), ecn) }
+        get!(self.header_()[DSCP_ECN], ecn)
     }
 
     /// Returns the total length field of the header
     pub fn get_total_length(&self) -> u16 {
-        unsafe { NE::read_u16(self.as_slice().r(TOTAL_LENGTH)) }
+        NE::read_u16(&self.header_()[TOTAL_LENGTH])
     }
 
     /// Returns the length (header + data) of this packet
@@ -174,37 +174,35 @@ where
 
     /// Returns the identification field of the header
     pub fn get_identification(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(IDENTIFICATION)) }
+        NE::read_u16(&self.header_()[IDENTIFICATION])
     }
 
     /// Returns the DF (Don't Fragment) field of the header
     pub fn get_df(&self) -> bool {
-        unsafe { get!(self.as_slice().gu(FLAGS), df) == 1 }
+        get!(self.header_()[FLAGS], df) == 1
     }
 
     /// Returns the MF (More Fragments) field of the header
     pub fn get_mf(&self) -> bool {
-        unsafe { get!(self.as_slice().gu(FLAGS), mf) == 1 }
+        get!(self.header_()[FLAGS], mf) == 1
     }
 
     /// Returns the Fragment Offset field of the header
     pub fn get_fragment_offset(&self) -> u16 {
-        unsafe {
-            get!(
-                NE::read_u16(&self.as_slice().r(FRAGMENT_OFFSET)),
-                fragment_offset
-            )
-        }
+        get!(
+            NE::read_u16(&self.header_()[FRAGMENT_OFFSET]),
+            fragment_offset
+        )
     }
 
     /// Returns the TTL (Time To Live) field of the header
     pub fn get_ttl(&self) -> u8 {
-        unsafe { self.as_slice().gu(TTL).clone() }
+        self.header_()[TTL]
     }
 
     /// Returns the protocol field of the header
     pub fn get_protocol(&self) -> Protocol {
-        unsafe { self.as_slice().gu(PROTOCOL).clone().into() }
+        self.header_()[PROTOCOL].into()
     }
 
     /// Returns the Source (IP address) field of the header
@@ -218,7 +216,13 @@ where
     }
 
     /* Miscellaneous */
-    /// View into the payload
+    /// Immutable view into the header
+    pub fn header(&self) -> &[u8] {
+        let end = usize(self.header_len());
+        unsafe { &self.as_slice().rt(..end) }
+    }
+
+    /// Immutable view into the payload
     pub fn payload(&self) -> &[u8] {
         let start = usize(self.header_len());
         unsafe { &self.as_slice().rf(start..) }
@@ -229,8 +233,14 @@ where
         self.buffer.as_slice()
     }
 
+    fn header_(&self) -> &[u8; MIN_HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= MIN_HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
+
     fn get_header_checksum(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(CHECKSUM)) }
+        NE::read_u16(&self.header_()[CHECKSUM])
     }
 
     fn header_len(&self) -> u8 {
@@ -239,10 +249,6 @@ where
 
     fn payload_len(&self) -> u16 {
         self.get_total_length() - u16(self.header_len())
-    }
-
-    fn header(&self) -> &[u8] {
-        unsafe { self.as_slice().rt(..usize(self.header_len())) }
     }
 
     fn invalidate_header_checksum(self) -> Packet<B, Invalid> {
@@ -271,6 +277,12 @@ where
     /* Private */
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
+    }
+
+    fn header_mut_(&mut self) -> &mut [u8; MIN_HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= MIN_HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
     }
 }
 
@@ -410,49 +422,47 @@ where
     /* Setters */
     /// Sets the version field of the header
     pub fn set_version(&mut self, version: u8) {
-        unsafe {
-            set_!(self.as_mut_slice().gum(VERSION_IHL), version, version);
-        }
+        set!(self.header_mut_()[VERSION_IHL], version, version);
     }
 
     // NOTE(unsafe) this doesn't check that the header still fits in the buffer
     unsafe fn set_ihl(&mut self, ihl: u8) {
-        set!(self.as_mut_slice()[VERSION_IHL], ihl, ihl);
+        set!(self.header_mut_()[VERSION_IHL], ihl, ihl);
     }
 
     /// Sets the DSCP (Differentiated Services Code Point) field of the header
     pub fn set_dscp(&mut self, dscp: u8) {
-        set!(self.as_mut_slice()[DSCP_ECN], dscp, dscp);
+        set!(self.header_mut_()[DSCP_ECN], dscp, dscp);
     }
 
     /// Sets the ECN (Explicit Congestion Notification) field of the header
     pub fn set_ecn(&mut self, ecn: u8) {
-        set!(self.as_mut_slice()[DSCP_ECN], ecn, ecn);
+        set!(self.header_mut_()[DSCP_ECN], ecn, ecn);
     }
 
     // NOTE(unsafe) this doesn't check that `len` is greater than the header length or that it
     // doesn't exceed the buffer length
     unsafe fn set_total_length(&mut self, len: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[TOTAL_LENGTH], len)
+        NE::write_u16(&mut self.header_mut_()[TOTAL_LENGTH], len)
     }
 
     /// Sets the identification field of the header
     pub fn set_identification(&mut self, id: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[IDENTIFICATION], id)
+        NE::write_u16(&mut self.header_mut_()[IDENTIFICATION], id)
     }
 
     fn clear_reserved_flag(&mut self) {
-        set!(self.as_mut_slice()[FLAGS], reserved, 0);
+        set!(self.header_mut_()[FLAGS], reserved, 0);
     }
 
     /// Sets the DF (Don't Fragment) field of the header
     pub fn set_df(&mut self, df: bool) {
-        set!(self.as_mut_slice()[FLAGS], df, if df { 1 } else { 0 });
+        set!(self.header_mut_()[FLAGS], df, if df { 1 } else { 0 });
     }
 
     /// Sets the MF (More Fragments) field of the header
     pub fn set_mf(&mut self, mf: bool) {
-        set!(self.as_mut_slice()[FLAGS], mf, if mf { 1 } else { 0 });
+        set!(self.header_mut_()[FLAGS], mf, if mf { 1 } else { 0 });
     }
 
     /// Sets the Fragment Offset field of the header
@@ -462,7 +472,7 @@ where
         let start = FRAGMENT_OFFSET.start;
 
         // low byte
-        self.as_mut_slice()[start + 1] = fo.low();
+        self.header_mut_()[start + 1] = fo.low();
 
         // high byte
         let byte = &mut self.as_mut_slice()[start];
@@ -472,29 +482,29 @@ where
 
     /// Sets the TTL (Time To Live) field of the header
     pub fn set_ttl(&mut self, ttl: u8) {
-        self.as_mut_slice()[TTL] = ttl;
+        self.header_mut_()[TTL] = ttl;
     }
 
     /// Sets the Protocol field of the header
     pub fn set_protocol(&mut self, proto: Protocol) {
-        self.as_mut_slice()[PROTOCOL] = proto.into();
+        self.header_mut_()[PROTOCOL] = proto.into();
     }
 
     /// Sets the Source (IP address) field of the header
     pub fn set_source(&mut self, addr: Addr) {
-        self.as_mut_slice()[SOURCE].copy_from_slice(&addr.0)
+        self.header_mut_()[SOURCE].copy_from_slice(&addr.0)
     }
 
     /// Sets the Destination (IP address) field of the header
     pub fn set_destination(&mut self, addr: Addr) {
-        self.as_mut_slice()[DESTINATION].copy_from_slice(&addr.0)
+        self.header_mut_()[DESTINATION].copy_from_slice(&addr.0)
     }
 
     /* Miscellaneous */
     /// Updates the Checksum field of the header
     pub fn update_checksum(mut self) -> Packet<B, Valid> {
         let cksum = compute_checksum(&self.as_slice()[..usize(self.header_len())], CHECKSUM.start);
-        NE::write_u16(&mut self.as_mut_slice()[CHECKSUM], cksum);
+        NE::write_u16(&mut self.header_mut_()[CHECKSUM], cksum);
 
         Packet {
             buffer: self.buffer,

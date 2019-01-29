@@ -31,7 +31,7 @@ const SEQ_NO: Range<usize> = 6..8;
 const PAYLOAD: RangeFrom<usize> = 8..;
 
 /// Size of the ICMP header
-pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
+pub const HEADER_SIZE: u8 = PAYLOAD.start as u8;
 
 /// ICMP Message
 pub struct Message<BUFFER, TYPE, CHECKSUM>
@@ -78,12 +78,12 @@ where
     /* Getters */
     /// Returns the Identifier field of the header
     pub fn get_identifier(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(IDENT)) }
+        NE::read_u16(&self.header_()[IDENT])
     }
 
     /// Returns the Identifier field of the header
     pub fn get_sequence_number(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(SEQ_NO)) }
+        NE::read_u16(&self.header_()[SEQ_NO])
     }
 }
 
@@ -95,12 +95,12 @@ where
     /* Setters */
     /// Returns the Identifier field of the header
     pub fn set_identifier(&mut self, ident: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[IDENT], ident)
+        NE::write_u16(&mut self.header_mut_()[IDENT], ident)
     }
 
     /// Returns the Identifier field of the header
     pub fn set_sequence_number(&mut self, seq_no: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[SEQ_NO], seq_no)
+        NE::write_u16(&mut self.header_mut_()[SEQ_NO], seq_no)
     }
 }
 
@@ -133,12 +133,12 @@ where
     /* Setters */
     /// Sets the Type field of the header
     pub fn set_type(&mut self, type_: Type) {
-        self.as_mut_slice()[TYPE] = type_.into();
+        self.header_mut_()[TYPE] = type_.into();
     }
 
     /// Sets the Code field of the header
     pub fn set_code(&mut self, code: u8) {
-        self.as_mut_slice()[CODE] = code;
+        self.header_mut_()[CODE] = code;
     }
 }
 
@@ -239,7 +239,7 @@ where
         } else if typeid!(T == EchoRequest) {
             Type::EchoRequest
         } else {
-            unsafe { self.as_slice().gu(TYPE).clone().into() }
+            self.header_()[TYPE].into()
         }
     }
 
@@ -250,7 +250,7 @@ where
         } else if typeid!(T == EchoRequest) {
             0
         } else {
-            unsafe { self.as_slice().gu(CODE).clone() }
+            self.header_()[CODE]
         }
     }
 
@@ -274,8 +274,14 @@ where
         self.buffer.as_slice()
     }
 
+    fn header_(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
+
     fn get_checksum(&self) -> u16 {
-        NE::read_u16(&self.as_slice()[CHECKSUM])
+        NE::read_u16(&self.header_()[CHECKSUM])
     }
 }
 
@@ -287,6 +293,12 @@ where
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
     }
+
+    fn header_mut_(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
+    }
 }
 
 impl<B, T> Message<B, T, Invalid>
@@ -295,13 +307,13 @@ where
 {
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut_slice()[PAYLOAD]
+        unsafe { self.as_mut_slice().rfm(PAYLOAD) }
     }
 
     /// Updates the Checksum field of the header
     pub fn update_checksum(mut self) -> Message<B, T, Valid> {
         let cksum = ipv4::compute_checksum(&self.as_bytes(), CHECKSUM.start);
-        NE::write_u16(&mut self.as_mut_slice()[CHECKSUM], cksum);
+        NE::write_u16(&mut self.header_mut_()[CHECKSUM], cksum);
 
         unsafe { Message::unchecked(self.buffer) }
     }
