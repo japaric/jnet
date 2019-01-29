@@ -82,7 +82,11 @@ where
     }
 
     /// Truncates the owning slice to the specified `len`
-    pub fn truncate(&mut self, len: I) {
+    pub fn truncate<L>(&mut self, len: L)
+    where
+        L: Into<I>,
+    {
+        let len = len.into();
         if len < self.end {
             self.end = len;
         }
@@ -191,12 +195,13 @@ where
     }
 }
 
-impl<B, I> Truncate<I> for OwningSliceTo<B, I>
+impl<B, I, L> Truncate<L> for OwningSliceTo<B, I>
 where
     B: AsSlice,
     I: sealed::Index,
+    L: Into<I>,
 {
-    fn truncate(&mut self, len: I) {
+    fn truncate(&mut self, len: L) {
         self.truncate(len)
     }
 }
