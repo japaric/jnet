@@ -156,16 +156,6 @@ macro_rules! set {
     }};
 }
 
-/// Writes to the bitfield of a byte / word
-macro_rules! set_ {
-    ($byte:expr, $field:ident, $value:expr) => {{
-        let byte = $byte;
-
-        *byte &= !(self::$field::MASK << self::$field::OFFSET);
-        *byte |= ($value & self::$field::MASK) << self::$field::OFFSET;
-    }};
-}
-
 /// Poor man's specialization
 macro_rules! typeid {
     ($type_parameter:ident == $concrete_type:ident) => {
