@@ -36,8 +36,10 @@ const CODE: usize = 1;
 const CHECKSUM: Range<usize> = 2..4;
 const PAYLOAD: RangeFrom<usize> = 4..;
 
+/// Header size
+pub const HEADER_SIZE: u8 = CHECKSUM.end as u8;
+
 // Neighbor{Advertisement,Solicitation}
-// const RESERVED: Range<usize> = 4..8;
 const RESERVED0: usize = 4;
 
 // Echo{Request,Reply}
@@ -94,17 +96,17 @@ where
     /* Getters */
     /// Reads the 'Type' field
     pub fn get_type(&self) -> Type {
-        unsafe { Type::from(*self.as_slice().gu(TYPE)) }
+        Type::from(self.header()[TYPE])
     }
 
     /// Reads the 'Code' field
     pub fn get_code(&self) -> u8 {
-        unsafe { *self.as_slice().gu(CODE) }
+        self.header()[CODE]
     }
 
     /// Reads the 'Checksum' field
     pub fn get_checksum(&self) -> u16 {
-        unsafe { NE::read_u16(&self.as_slice().r(CHECKSUM)) }
+        NE::read_u16(&self.header()[CHECKSUM])
     }
 
     /// Returns the byte representation of this frame
@@ -172,6 +174,12 @@ where
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
     }
+
+    fn header(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
 }
 
 impl<B, T> Message<B, T>
@@ -185,11 +193,17 @@ where
     }
 
     fn set_checksum(&mut self, checksum: u16) {
-        NE::write_u16(&mut self.as_mut()[CHECKSUM], checksum);
+        NE::write_u16(&mut self.header_mut()[CHECKSUM], checksum);
     }
 
-    fn as_mut(&mut self) -> &mut [u8] {
+    fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
+    }
+
+    fn header_mut(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
     }
 }
 
@@ -220,11 +234,11 @@ where
     B: AsMutSlice<Element = u8>,
 {
     fn set_type(&mut self, ty: Type) {
-        self.as_mut()[TYPE] = ty.into();
+        self.header_mut()[TYPE] = ty.into();
     }
 
     fn set_code(&mut self, code: u8) {
-        self.as_mut()[CODE] = code;
+        self.header_mut()[CODE] = code;
     }
 }
 
@@ -451,30 +465,42 @@ where
     /* Setters */
     /// Sets the 'Router' flag
     pub fn set_router(&mut self, router: bool) {
-        set!(self.as_mut()[RESERVED0], router, if router { 1 } else { 0 })
+        unsafe {
+            set!(
+                *self.as_mut_slice().gum(RESERVED0),
+                router,
+                if router { 1 } else { 0 }
+            )
+        }
     }
 
     /// Sets the 'Solicited' flag
     pub fn set_solicited(&mut self, solicited: bool) {
-        set!(
-            self.as_mut()[RESERVED0],
-            solicited,
-            if solicited { 1 } else { 0 }
-        )
+        unsafe {
+            set!(
+                *self.as_mut_slice().gum(RESERVED0),
+                solicited,
+                if solicited { 1 } else { 0 }
+            )
+        }
     }
 
     /// Sets the 'Override' flag
     pub fn set_override(&mut self, override_: bool) {
-        set!(
-            self.as_mut()[RESERVED0],
-            override_,
-            if override_ { 1 } else { 0 }
-        )
+        unsafe {
+            set!(
+                *self.as_mut_slice().gum(RESERVED0),
+                override_,
+                if override_ { 1 } else { 0 }
+            )
+        }
     }
 
     #[allow(dead_code)]
     pub(crate) fn set_target_addr(&mut self, addr: ipv6::Addr) {
-        self.as_mut()[TARGET].copy_from_slice(&addr.0);
+        unsafe {
+            self.as_mut_slice().rm(TARGET).copy_from_slice(&addr.0);
+        }
     }
 
     #[cfg(todo)]
@@ -489,7 +515,7 @@ where
 
     /// Mutable view into the 'Target Link-layer address' option
     pub fn target_ll_mut(&mut self) -> Option<&mut [u8]> {
-        OptionsMut::new(&mut self.as_mut()[24..])
+        OptionsMut::new(unsafe { self.as_mut_slice().rfm(24..) })
             .filter_map(|opt| {
                 if opt.ty == OptionType::TargetLinkLayerAddress {
                     Some(opt.contents)
@@ -600,16 +626,16 @@ where
 
     /// Sets the 'Identifier' field
     pub fn set_identifier(&mut self, id: u16) {
-        NE::write_u16(&mut self.as_mut()[IDENTIFIER], id)
+        unsafe { NE::write_u16(self.as_mut_slice().rm(IDENTIFIER), id) }
     }
 
     /// Sets the 'Sequence number' field
     pub fn set_sequence_number(&mut self, seq: u16) {
-        NE::write_u16(&mut self.as_mut()[SEQUENCE], seq)
+        unsafe { NE::write_u16(self.as_mut_slice().rm(SEQUENCE), seq) }
     }
 
     fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut()[SEQUENCE.end..]
+        unsafe { self.as_mut_slice().rfm(SEQUENCE.end..) }
     }
 }
 
