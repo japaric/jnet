@@ -104,6 +104,7 @@ extern crate pretty_assertions;
 mod macros;
 
 mod fmt;
+mod sealed;
 mod traits;
 
 // Medium Access Control layer

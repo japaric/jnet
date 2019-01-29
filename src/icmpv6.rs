@@ -21,9 +21,11 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use owning_slice::Truncate;
 
+pub use crate::icmp::{EchoReply, EchoRequest};
 use crate::{
     fmt::Quoted,
     ipv6,
+    sealed::Echo,
     traits::{TryFrom, TryInto, UncheckedIndex},
     Unknown,
 };
@@ -512,12 +514,6 @@ where
     }
 }
 
-/// [Implementation detail]
-pub unsafe trait Echo: 'static {}
-
-unsafe impl Echo for EchoReply {}
-unsafe impl Echo for EchoRequest {}
-
 impl<B, E> Message<B, E>
 where
     B: AsSlice<Element = u8>,
@@ -558,9 +554,6 @@ where
     }
 }
 
-/// [Type state]
-pub enum EchoRequest {}
-
 impl<B> TryFrom<Message<B, Unknown>> for Message<B, EchoRequest>
 where
     B: AsSlice<Element = u8>,
@@ -575,9 +568,6 @@ where
         }
     }
 }
-
-/// [Type state]
-pub enum EchoReply {}
 
 impl<B> TryFrom<Message<B, Unknown>> for Message<B, EchoReply>
 where

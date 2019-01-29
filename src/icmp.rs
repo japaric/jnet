@@ -17,11 +17,12 @@ use cast::usize;
 use crate::{
     fmt::Hex,
     ipv4,
+    sealed::Echo,
     traits::{TryFrom, TryInto, UncheckedIndex},
     Invalid, Unknown, Valid,
 };
 
-/* Packet structure */
+/* Message structure */
 const TYPE: usize = 0;
 const CODE: usize = 1;
 const CHECKSUM: Range<usize> = 2..4;
@@ -32,8 +33,8 @@ const PAYLOAD: RangeFrom<usize> = 8..;
 /// Size of the ICMP header
 pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
 
-/// ICMP packet
-pub struct Packet<BUFFER, TYPE, CHECKSUM>
+/// ICMP Message
+pub struct Message<BUFFER, TYPE, CHECKSUM>
 where
     BUFFER: AsSlice<Element = u8>,
     TYPE: 'static,
@@ -49,15 +50,8 @@ pub enum EchoReply {}
 /// [Type State] The Echo Request type
 pub enum EchoRequest {}
 
-/// [Implementation Detail] EchoReply or EchoRequest
-#[doc(hidden)]
-pub unsafe trait Echo {}
-
-unsafe impl Echo for EchoReply {}
-unsafe impl Echo for EchoRequest {}
-
 /* EchoRequest */
-impl<B> Packet<B, EchoRequest, Invalid>
+impl<B> Message<B, EchoRequest, Invalid>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
@@ -66,17 +60,17 @@ where
     pub fn new(buffer: B) -> Self {
         assert!(buffer.as_slice().len() >= usize(HEADER_SIZE));
 
-        let mut packet: Packet<B, Unknown, Invalid> = unsafe { Packet::unchecked(buffer) };
+        let mut packet: Message<B, Unknown, Invalid> = unsafe { Message::unchecked(buffer) };
 
         packet.set_type(Type::EchoRequest);
         packet.set_code(0);
 
-        unsafe { Packet::unchecked(packet.buffer) }
+        unsafe { Message::unchecked(packet.buffer) }
     }
 }
 
 /* EchoReply OR EchoRequest */
-impl<B, E, C> Packet<B, E, C>
+impl<B, E, C> Message<B, E, C>
 where
     B: AsSlice<Element = u8>,
     E: Echo,
@@ -93,7 +87,7 @@ where
     }
 }
 
-impl<B, E> Packet<B, E, Invalid>
+impl<B, E> Message<B, E, Invalid>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
     E: Echo,
@@ -111,7 +105,7 @@ where
 }
 
 /* Unknown */
-impl<B> Packet<B, Unknown, Valid>
+impl<B> Message<B, Unknown, Valid>
 where
     B: AsSlice<Element = u8>,
 {
@@ -122,7 +116,7 @@ where
             return Err(bytes);
         }
 
-        let packet: Self = unsafe { Packet::unchecked(bytes) };
+        let packet: Self = unsafe { Message::unchecked(bytes) };
 
         if ipv4::verify_checksum(packet.as_bytes()) {
             Ok(packet)
@@ -132,7 +126,7 @@ where
     }
 }
 
-impl<B> Packet<B, Unknown, Invalid>
+impl<B> Message<B, Unknown, Invalid>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
@@ -148,75 +142,75 @@ where
     }
 }
 
-impl<B> Packet<B, Unknown, Valid>
+impl<B> Message<B, Unknown, Valid>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
     /* Setters */
     /// Sets the Type field of the header
-    pub fn set_type(self, type_: Type) -> Packet<B, Unknown, Invalid> {
+    pub fn set_type(self, type_: Type) -> Message<B, Unknown, Invalid> {
         let mut packet = self.invalidate_header_checksum();
         packet.set_type(type_);
         packet
     }
 
     /// Sets the Code field of the header
-    pub fn set_code(self, code: u8) -> Packet<B, Unknown, Invalid> {
+    pub fn set_code(self, code: u8) -> Message<B, Unknown, Invalid> {
         let mut packet = self.invalidate_header_checksum();
         packet.set_code(code);
         packet
     }
 }
 
-impl<B, C> Packet<B, Unknown, C>
+impl<B, C> Message<B, Unknown, C>
 where
     B: AsSlice<Element = u8>,
 {
     /// Downcasts this packet with unknown type into a specific type
-    pub fn downcast<TYPE>(self) -> Result<Packet<B, TYPE, C>, Self>
+    pub fn downcast<TYPE>(self) -> Result<Message<B, TYPE, C>, Self>
     where
-        Self: TryInto<Packet<B, TYPE, C>, Error = Self>,
+        Self: TryInto<Message<B, TYPE, C>, Error = Self>,
     {
         self.try_into()
     }
 }
 
-impl<B, C> From<Packet<B, EchoRequest, C>> for Packet<B, EchoReply, Valid>
+impl<B, C> From<Message<B, EchoRequest, C>> for Message<B, EchoReply, Valid>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
-    fn from(p: Packet<B, EchoRequest, C>) -> Self {
-        let mut p: Packet<B, Unknown, Invalid> = unsafe { Packet::unchecked(p.buffer) };
+    fn from(p: Message<B, EchoRequest, C>) -> Self {
+        let mut p: Message<B, Unknown, Invalid> = unsafe { Message::unchecked(p.buffer) };
         p.set_type(Type::EchoReply);
-        let p: Packet<B, EchoReply, Invalid> = unsafe { Packet::unchecked(p.buffer) };
+        let p: Message<B, EchoReply, Invalid> = unsafe { Message::unchecked(p.buffer) };
         p.update_checksum()
     }
 }
 
-impl<B, C> TryFrom<Packet<B, Unknown, C>> for Packet<B, EchoReply, C>
+impl<B, C> TryFrom<Message<B, Unknown, C>> for Message<B, EchoReply, C>
 where
     B: AsSlice<Element = u8>,
 {
-    type Error = Packet<B, Unknown, C>;
+    type Error = Message<B, Unknown, C>;
 
-    fn try_from(p: Packet<B, Unknown, C>) -> Result<Self, Packet<B, Unknown, C>> {
+    fn try_from(p: Message<B, Unknown, C>) -> Result<Self, Message<B, Unknown, C>> {
         if p.get_type() == Type::EchoReply && p.get_code() == 0 {
-            Ok(unsafe { Packet::unchecked(p.buffer) })
+            Ok(unsafe { Message::unchecked(p.buffer) })
         } else {
             Err(p)
         }
     }
 }
 
-impl<B, C> TryFrom<Packet<B, Unknown, C>> for Packet<B, EchoRequest, C>
+impl<B, C> TryFrom<Message<B, Unknown, C>> for Message<B, EchoRequest, C>
 where
     B: AsSlice<Element = u8>,
 {
-    type Error = Packet<B, Unknown, C>;
+    type Error = Message<B, Unknown, C>;
 
-    fn try_from(p: Packet<B, Unknown, C>) -> Result<Self, Packet<B, Unknown, C>> {
+    fn try_from(p: Message<B, Unknown, C>) -> Result<Self, Message<B, Unknown, C>> {
         if p.get_type() == Type::EchoRequest && p.get_code() == 0 {
-            Ok(unsafe { Packet::unchecked(p.buffer) })
+            Ok(unsafe { Message::unchecked(p.buffer) })
         } else {
             Err(p)
         }
@@ -224,13 +218,13 @@ where
 }
 
 /* TYPE */
-impl<B, T, C> Packet<B, T, C>
+impl<B, T, C> Message<B, T, C>
 where
     B: AsSlice<Element = u8>,
 {
     /* Constructors */
     unsafe fn unchecked(buffer: B) -> Self {
-        Packet {
+        Message {
             buffer,
             _checksum: PhantomData,
             _type: PhantomData,
@@ -285,7 +279,7 @@ where
     }
 }
 
-impl<B, T, C> Packet<B, T, C>
+impl<B, T, C> Message<B, T, C>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
@@ -295,7 +289,7 @@ where
     }
 }
 
-impl<B, T> Packet<B, T, Invalid>
+impl<B, T> Message<B, T, Invalid>
 where
     B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
 {
@@ -305,29 +299,29 @@ where
     }
 
     /// Updates the Checksum field of the header
-    pub fn update_checksum(mut self) -> Packet<B, T, Valid> {
+    pub fn update_checksum(mut self) -> Message<B, T, Valid> {
         let cksum = ipv4::compute_checksum(&self.as_bytes(), CHECKSUM.start);
         NE::write_u16(&mut self.as_mut_slice()[CHECKSUM], cksum);
 
-        unsafe { Packet::unchecked(self.buffer) }
+        unsafe { Message::unchecked(self.buffer) }
     }
 }
 
-impl<B, T> Packet<B, T, Valid>
+impl<B, T> Message<B, T, Valid>
 where
     B: AsSlice<Element = u8>,
 {
-    fn invalidate_header_checksum(self) -> Packet<B, T, Invalid> {
-        unsafe { Packet::unchecked(self.buffer) }
+    fn invalidate_header_checksum(self) -> Message<B, T, Invalid> {
+        unsafe { Message::unchecked(self.buffer) }
     }
 }
 
-impl<B, T, C> Clone for Packet<B, T, C>
+impl<B, T, C> Clone for Message<B, T, C>
 where
     B: AsSlice<Element = u8> + Clone,
 {
     fn clone(&self) -> Self {
-        Packet {
+        Message {
             buffer: self.buffer.clone(),
             _type: PhantomData,
             _checksum: PhantomData,
@@ -336,13 +330,13 @@ where
 }
 
 /// NOTE excludes the payload
-impl<B, E, C> fmt::Debug for Packet<B, E, C>
+impl<B, E, C> fmt::Debug for Message<B, E, C>
 where
     B: AsSlice<Element = u8>,
     E: Echo,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("icmp::Packet")
+        f.debug_struct("icmp::Message")
             .field("type", &self.get_type())
             .field("code", &self.get_code())
             .field("checksum", &Hex(self.get_checksum()))
@@ -353,12 +347,12 @@ where
     }
 }
 
-impl<B, C> fmt::Debug for Packet<B, Unknown, C>
+impl<B, C> fmt::Debug for Message<B, Unknown, C>
 where
     B: AsSlice<Element = u8>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("icmp::Packet")
+        f.debug_struct("icmp::Message")
             .field("type", &self.get_type())
             .field("code", &self.get_code())
             .field("checksum", &Hex(self.get_checksum()))
@@ -450,7 +444,7 @@ mod tests {
         assert_eq!(ip.get_destination(), IP_DST);
         assert_eq!(ip.get_source(), IP_SRC);
 
-        let icmp = icmp::Packet::parse(ip.payload())
+        let icmp = icmp::Message::parse(ip.payload())
             .unwrap()
             .downcast::<icmp::EchoRequest>()
             .unwrap();
