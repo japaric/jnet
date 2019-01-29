@@ -12,7 +12,7 @@ use core::ops::{Range, RangeFrom};
 
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
-use cast::{u16, usize};
+use cast::usize;
 use owning_slice::Truncate;
 
 use crate::{
@@ -30,7 +30,7 @@ const OPER: Range<usize> = 6..8;
 const PAYLOAD: RangeFrom<usize> = 8..;
 
 /// Size of the ARP header
-pub const HEADER_SIZE: u16 = PAYLOAD.start as u16;
+pub const HEADER_SIZE: u8 = PAYLOAD.start as u8;
 
 // NOTE Use only for Packet<_, Ethernet, Ipv4>
 const SHA: Range<usize> = 8..14;
@@ -59,7 +59,7 @@ where
 /* Ethernet - Ipv4 */
 impl<B> Packet<B, Ethernet, Ipv4>
 where
-    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u16>,
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Truncate<u8>,
 {
     /* Constructors */
     /// Transforms the given buffer into an ARP packet
@@ -239,7 +239,7 @@ where
 
 impl<B> Packet<B, Unknown, Unknown>
 where
-    B: AsSlice<Element = u8> + Truncate<u16>,
+    B: AsSlice<Element = u8>,
 {
     /// Parses bytes into an ARP packet
     pub fn parse(bytes: B) -> Result<Self, B> {
@@ -248,22 +248,21 @@ where
             return Err(bytes);
         }
 
-        let mut packet = Packet {
+        let p = Packet {
             buffer: bytes,
             _htype: PhantomData,
             _ptype: PhantomData,
         };
 
-        let hlen = packet.get_hlen();
-        let plen = packet.get_plen();
+        let hlen = p.get_hlen();
+        let plen = p.get_plen();
 
-        let real_payload_len = 2 * (u16(hlen) + u16(plen));
-        if packet.payload().len() <= usize(real_payload_len) {
-            // incomplete payload
-            Err(packet.buffer)
+        let payload_len = 2 * (usize(hlen) + usize(plen));
+        if p.as_slice().len() < usize(HEADER_SIZE) + payload_len {
+            // too small; payload doesn't fit
+            Err(p.buffer)
         } else {
-            packet.buffer.truncate(HEADER_SIZE + real_payload_len);
-            Ok(packet)
+            Ok(p)
         }
     }
 }
@@ -318,7 +317,7 @@ where
         if typeid!(H == Ethernet) {
             HardwareType::Ethernet
         } else {
-            NE::read_u16(&self.as_slice()[HTYPE]).into()
+            NE::read_u16(&self.header()[HTYPE]).into()
         }
     }
 
@@ -327,7 +326,7 @@ where
         if typeid!(P == Ipv4) {
             ether::Type::Ipv4
         } else {
-            NE::read_u16(&self.as_slice()[PTYPE]).into()
+            NE::read_u16(&self.header()[PTYPE]).into()
         }
     }
 
@@ -336,7 +335,7 @@ where
         if typeid!(H == Ethernet) {
             6
         } else {
-            self.as_slice()[HLEN]
+            self.header()[HLEN]
         }
     }
 
@@ -345,23 +344,27 @@ where
         if typeid!(P == Ipv4) {
             4
         } else {
-            self.as_slice()[PLEN]
+            self.header()[PLEN]
         }
     }
 
     /// Returns the OPER (OPERation) field of the header
     pub fn get_oper(&self) -> Operation {
-        NE::read_u16(&self.as_slice()[OPER]).into()
+        NE::read_u16(&self.header()[OPER]).into()
     }
 
     /// View into the payload
+    ///
+    /// NOTE this may contain padding bytes at the end
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[PAYLOAD]
+        unsafe { self.as_slice().rf(PAYLOAD) }
     }
 
-    /// Returns the length (header + data) of this packet
-    pub fn len(&self) -> u16 {
-        HEADER_SIZE + 2 * (u16(self.get_hlen()) + u16(self.get_plen()))
+    /// Returns the canonical length of this packet
+    ///
+    /// This ignores padding bytes, if any
+    pub fn len(&self) -> u8 {
+        HEADER_SIZE + 2 * (self.get_hlen() + self.get_plen())
     }
 
     /* Miscellaneous */
@@ -371,6 +374,12 @@ where
     }
 
     /* Private */
+    fn header(&self) -> &[u8; 8] {
+        debug_assert!(self.as_slice().len() >= 8);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
+
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
     }
@@ -387,6 +396,8 @@ where
     }
 
     /// Mutable view into the payload
+    ///
+    /// NOTE this may contain padding bytes at the end
     pub fn payload_mut(&mut self) -> &mut [u8] {
         &mut self.as_mut_slice()[PAYLOAD]
     }
