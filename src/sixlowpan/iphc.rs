@@ -338,6 +338,11 @@ where
         }
     }
 
+    /// Immutable view into the header
+    pub fn header(&self) -> &[u8] {
+        unsafe { self.as_slice().rt(..usize::from(self.payload)) }
+    }
+
     /// Immutable view into the payload
     pub fn payload(&self) -> &[u8] {
         unsafe { self.as_slice().rf(usize::from(self.payload)..) }
@@ -350,47 +355,47 @@ where
 
     /// Reads the 'Traffic class, Flow label' field
     pub fn get_tf(&self) -> u8 {
-        get!(self.header()[IPHC0], tf)
+        get!(self.header_()[IPHC0], tf)
     }
 
     /// Reads the 'Next Header field
     pub fn get_nh(&self) -> bool {
-        get!(self.header()[IPHC0], nh) != 0
+        get!(self.header_()[IPHC0], nh) != 0
     }
 
     /// Reads the 'Hop Limit' field
     pub fn get_hlim(&self) -> u8 {
-        get!(self.header()[IPHC0], hlim)
+        get!(self.header_()[IPHC0], hlim)
     }
 
     /// Reads the 'Context IDentifier extension' field
     pub fn get_cid(&self) -> bool {
-        get!(self.header()[IPHC1], cid) != 0
+        get!(self.header_()[IPHC1], cid) != 0
     }
 
     /// Reads the 'Source Address Compression' field
     pub fn get_sac(&self) -> bool {
-        get!(self.header()[IPHC1], sac) != 0
+        get!(self.header_()[IPHC1], sac) != 0
     }
 
     /// Reads the 'Source Address Mode' field
     pub fn get_sam(&self) -> u8 {
-        get!(self.header()[IPHC1], sam)
+        get!(self.header_()[IPHC1], sam)
     }
 
     /// Reads the 'Multicast compression' field
     pub fn get_m(&self) -> bool {
-        get!(self.header()[IPHC1], m) != 0
+        get!(self.header_()[IPHC1], m) != 0
     }
 
     /// Reads the 'Destination Address Compression' field
     pub fn get_dac(&self) -> bool {
-        get!(self.header()[IPHC1], dac) != 0
+        get!(self.header_()[IPHC1], dac) != 0
     }
 
     /// Reads the 'Destination Address Mode' IPHC field
     pub fn get_dam(&self) -> u8 {
-        get!(self.header()[IPHC1], dam)
+        get!(self.header_()[IPHC1], dam)
     }
 
     /* Private */
@@ -399,7 +404,7 @@ where
     }
 
     // Header is at least two bytes long
-    fn header(&self) -> &[u8; 2] {
+    fn header_(&self) -> &[u8; 2] {
         debug_assert!(self.buffer.as_slice().len() >= 2);
 
         unsafe { &*(self.buffer.as_slice().as_ptr() as *const _) }

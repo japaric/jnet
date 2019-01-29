@@ -24,7 +24,7 @@ use owning_slice::Truncate;
 pub use crate::icmp::{EchoReply, EchoRequest};
 use crate::{
     fmt::Quoted,
-    ipv6,
+    ieee802154, ipv6,
     sealed::Echo,
     traits::{TryFrom, TryInto, UncheckedIndex},
     Unknown,
@@ -503,7 +503,6 @@ where
         }
     }
 
-    #[cfg(todo)]
     pub(crate) fn set_target_ll_addr(&mut self, addr: ieee802154::ExtendedAddr) {
         let opt = self.target_ll_mut().unwrap();
 

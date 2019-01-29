@@ -14,7 +14,11 @@ use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE, LE};
 use owning_slice::Truncate;
 
-use crate::traits::UncheckedIndex;
+use crate::{
+    icmpv6, ipv6,
+    sixlowpan::{iphc, nhc},
+    traits::UncheckedIndex,
+};
 
 /* Frame format (Section 7.2.1) */
 // Frame control low byte
@@ -66,6 +70,8 @@ mod src_addr_mode {
 // Sequence number
 const SEQUENCE: usize = 2;
 
+const HEADER_SIZE: u8 = SEQUENCE as u8 + 1;
+
 /// IEEE 802.15.4 MAC frame
 #[derive(Clone, Copy)]
 pub struct Frame<BUFFER>
@@ -73,7 +79,7 @@ where
     BUFFER: AsSlice<Element = u8>,
 {
     buffer: BUFFER,
-    payload_start: u8,
+    payload: u8,
 }
 
 impl<B> Frame<B>
@@ -167,7 +173,7 @@ where
 
         if let Ok(len) = len {
             Ok(Frame {
-                payload_start: len,
+                payload: len,
                 buffer: bytes,
             })
         } else {
@@ -178,42 +184,42 @@ where
     /* Accessors */
     /// Reads the 'Frame type' field
     pub fn get_type(&self) -> Type {
-        unsafe { Type::from(get!(self.as_slice().gu(CONTROLL), frame_type) & 0b111) }
+        Type::from(get!(self.header_()[CONTROLL], frame_type) & 0b111)
     }
 
     /// Reads the 'Security enabled' field
     pub fn get_security_enabled(&self) -> bool {
-        unsafe { get!(self.as_slice().gu(CONTROLL), security_enabled) == 1 }
+        get!(self.header_()[CONTROLL], security_enabled) == 1
     }
 
     /// Reads the 'Frame pending' field
     pub fn get_frame_pending(&self) -> bool {
-        unsafe { get!(self.as_slice().gu(CONTROLL), frame_pending) == 1 }
+        get!(self.header_()[CONTROLL], frame_pending) == 1
     }
 
     /// Reads the 'Ack. request' field
     pub fn get_ack_request(&self) -> bool {
-        unsafe { get!(self.as_slice().gu(CONTROLL), ack_request) == 1 }
+        get!(self.header_()[CONTROLL], ack_request) == 1
     }
 
     /// Reads the 'Intra-PAN' field
     pub fn get_intra_pan(&self) -> bool {
-        unsafe { get!(self.as_slice().gu(CONTROLL), intra_pan) == 1 }
+        get!(self.header_()[CONTROLL], intra_pan) == 1
     }
 
     /// Reads the 'Dest. addressing mode' field
     pub fn get_dest_addr_mode(&self) -> AddrMode {
-        unsafe { AddrMode::unchecked(get!(self.as_slice().gu(CONTROLH), dest_addr_mode)) }
+        unsafe { AddrMode::unchecked(get!(self.header_()[CONTROLH], dest_addr_mode)) }
     }
 
     /// Reads the 'Source addressing mode' field
     pub fn get_src_addr_mode(&self) -> AddrMode {
-        unsafe { AddrMode::unchecked(get!(self.as_slice().gu(CONTROLH), src_addr_mode)) }
+        unsafe { AddrMode::unchecked(get!(self.header_()[CONTROLH], src_addr_mode)) }
     }
 
     /// Reads the 'Sequence number' field
     pub fn get_sequence_number(&self) -> u8 {
-        unsafe { *self.as_slice().gu(SEQUENCE) }
+        self.header_()[SEQUENCE]
     }
 
     /// Reads the 'Destination PAN identifier' field
@@ -299,12 +305,12 @@ where
 
     /// Returns an immutable view into the header
     pub fn header(&self) -> &[u8] {
-        unsafe { self.as_slice().rt(..usize::from(self.payload_start)) }
+        unsafe { self.as_slice().rt(..usize::from(self.payload)) }
     }
 
     /// Returns an immutable view into the payload
     pub fn payload(&self) -> &[u8] {
-        unsafe { self.as_slice().rf(usize::from(self.payload_start)..) }
+        unsafe { self.as_slice().rf(usize::from(self.payload)..) }
     }
 
     /// Returns the byte representation of this frame
@@ -321,6 +327,12 @@ where
     /* Private */
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
+    }
+
+    fn header_(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
     }
 }
 
@@ -380,15 +392,12 @@ where
     /* Constructors */
     /// Creates a new data frame from the given buffer
     pub fn data(mut buffer: B, src_dest: SrcDest) -> Self {
-        let payload_start = 3 + src_dest.size();
-        assert!(buffer.as_slice().len() >= usize::from(payload_start));
+        let payload = 3 + src_dest.size();
+        assert!(buffer.as_slice().len() >= usize::from(payload));
 
         // Zero the frame control field and sequence number
         buffer.as_mut_slice()[..3].copy_from_slice(&[0, 0, 0]);
-        let mut frame = Frame {
-            buffer,
-            payload_start,
-        };
+        let mut frame = Frame { buffer, payload };
 
         frame.set_frame_type(Type::Data);
 
@@ -403,17 +412,17 @@ where
                 frame.set_intra_pan(1);
 
                 let mut start = 3;
-                LE::write_u16(&mut frame.as_mut()[start..start + 2], pan_id.0);
+                LE::write_u16(&mut frame.as_mut_slice()[start..start + 2], pan_id.0);
                 start += 2;
 
                 frame.set_dest_addr_mode(dest_addr.mode());
                 match dest_addr {
                     Addr::Short(sa) => {
-                        LE::write_u16(&mut frame.as_mut()[start..start + 2], sa.0);
+                        LE::write_u16(&mut frame.as_mut_slice()[start..start + 2], sa.0);
                         start += 2;
                     }
                     Addr::Extended(ea) => {
-                        LE::write_u64(&mut frame.as_mut()[start..start + 8], ea.0);
+                        LE::write_u64(&mut frame.as_mut_slice()[start..start + 8], ea.0);
                         start += 8;
                     }
                 }
@@ -421,11 +430,11 @@ where
                 frame.set_src_addr_mode(src_addr.mode());
                 match src_addr {
                     Addr::Short(sa) => {
-                        LE::write_u16(&mut frame.as_mut()[start..start + 2], sa.0);
+                        LE::write_u16(&mut frame.as_mut_slice()[start..start + 2], sa.0);
                         // start += 2;
                     }
                     Addr::Extended(ea) => {
-                        LE::write_u64(&mut frame.as_mut()[start..start + 8], ea.0);
+                        LE::write_u64(&mut frame.as_mut_slice()[start..start + 8], ea.0);
                         // start += 8;
                     }
                 }
@@ -440,7 +449,7 @@ where
     /// Sets the 'Ack. request' field to `ack`
     pub fn set_ack_request(&mut self, ack: bool) {
         set!(
-            self.as_mut()[CONTROLL],
+            self.header_mut_()[CONTROLL],
             ack_request,
             if ack { 1 } else { 0 }
         )
@@ -448,33 +457,39 @@ where
 
     /// Sets the 'Sequence number' field to `seq`
     pub fn set_sequence_number(&mut self, seq: u8) {
-        self.as_mut()[SEQUENCE] = seq;
+        self.header_mut_()[SEQUENCE] = seq;
     }
 
     fn set_frame_type(&mut self, ftype: Type) {
-        set!(self.as_mut()[CONTROLL], frame_type, u8::from(ftype))
+        set!(self.header_mut_()[CONTROLL], frame_type, u8::from(ftype))
     }
 
     fn set_intra_pan(&mut self, ip: u8) {
-        set!(self.as_mut()[CONTROLL], intra_pan, ip)
+        set!(self.header_mut_()[CONTROLL], intra_pan, ip)
     }
 
     fn set_dest_addr_mode(&mut self, am: AddrMode) {
-        set!(self.as_mut()[CONTROLH], dest_addr_mode, u8::from(am))
+        set!(self.header_mut_()[CONTROLH], dest_addr_mode, u8::from(am))
     }
 
     fn set_src_addr_mode(&mut self, am: AddrMode) {
-        set!(self.as_mut()[CONTROLH], src_addr_mode, u8::from(am))
+        set!(self.header_mut_()[CONTROLH], src_addr_mode, u8::from(am))
     }
 
     /* Private */
-    fn as_mut(&mut self) -> &mut [u8] {
+    fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
     }
 
+    fn header_mut_(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
+    }
+
     fn payload_mut(&mut self) -> &mut [u8] {
-        let start = usize::from(self.payload_start);
-        &mut self.as_mut()[start..]
+        let start = usize::from(self.payload);
+        &mut self.as_mut_slice()[start..]
     }
 }
 
@@ -489,24 +504,24 @@ where
         let plen = payload.len();
 
         self.payload_mut()[..plen].copy_from_slice(payload);
-        self.buffer.truncate(self.payload_start + plen as u8);
+        self.buffer.truncate(self.payload + plen as u8);
     }
 
-    #[cfg(todo)]
+    /// Fills the buffer with an 'Echo Reply' ICMPv6 message
     pub fn echo_reply<F>(&mut self, src: ipv6::Addr, dest: ipv6::Addr, f: F)
     where
         F: FnOnce(&mut icmpv6::Message<&mut [u8], icmpv6::EchoReply>),
     {
         const HOP_LIMIT: u8 = 64;
 
-        let ctxt = sixlowpan::Context {
+        let ctxt = iphc::Context {
             source: self.get_src_addr(),
             destination: self.get_dest_addr(),
         };
 
-        let mut packet = sixlowpan::Packet::new(
+        let mut packet = iphc::Packet::new(
             self.payload_mut(),
-            Some(ipv6::NextHeader::Icmpv6),
+            Some(ipv6::NextHeader::Ipv6Icmp),
             HOP_LIMIT,
             src,
             dest,
@@ -517,11 +532,11 @@ where
         f(&mut message);
         message.update_checksum(src, dest);
 
-        let len = (message.bytes().len() + packet.header().len() + self.header().len()) as u8;
+        let len = (message.as_bytes().len() + packet.header().len() + self.header().len()) as u8;
         self.buffer.truncate(len);
     }
 
-    #[cfg(todo)]
+    /// Fills the payload with a 'Neighbor Advertisement' ICMPv6 message
     pub fn neighbor_advertisement<F>(
         &mut self,
         src: ipv6::Addr,
@@ -534,14 +549,14 @@ where
     {
         const HOP_LIMIT: u8 = 255;
 
-        let ctxt = sixlowpan::Context {
+        let ctxt = iphc::Context {
             source: self.get_src_addr(),
             destination: self.get_dest_addr(),
         };
 
-        let mut packet = sixlowpan::Packet::new(
+        let mut packet = iphc::Packet::new(
             self.payload_mut(),
-            Some(ipv6::NextHeader::Icmpv6),
+            Some(ipv6::NextHeader::Ipv6Icmp),
             HOP_LIMIT,
             src,
             dest,
@@ -559,11 +574,11 @@ where
         }
         message.update_checksum(src, dest);
 
-        let len = (message.bytes().len() + packet.header().len() + self.header().len()) as u8;
+        let len = (message.as_bytes().len() + packet.header().len() + self.header().len()) as u8;
         self.buffer.truncate(len);
     }
 
-    #[cfg(todo)]
+    /// Fills the payload with a UDP packet
     pub fn udp<F>(
         &mut self,
         src_addr: ipv6::Addr,
@@ -573,18 +588,18 @@ where
         elide_checksum: bool,
         f: F,
     ) where
-        F: FnOnce(&mut sixlowpan::UdpPacket<&mut [u8]>),
+        F: FnOnce(&mut nhc::UdpPacket<&mut [u8]>),
     {
-        use sixlowpan::UdpPacket;
+        use nhc::UdpPacket;
 
         const HOP_LIMIT: u8 = 64;
 
-        let ctxt = sixlowpan::Context {
+        let ctxt = iphc::Context {
             source: self.get_src_addr(),
             destination: self.get_dest_addr(),
         };
 
-        let mut ip_packet = sixlowpan::Packet::new(
+        let mut ip_packet = iphc::Packet::new(
             self.payload_mut(),
             None,
             HOP_LIMIT,
@@ -612,7 +627,7 @@ where
     //         source: self.get_src_addr(),
     //         destination: self.get_dest_addr(),
     //     };
-    //     let len = self.payload_start + {
+    //     let len = self.payload + {
     //         let mut packet =
     //             sixlowpan::Packet::new(self.payload_mut(), hop_limit, src, dest, &ctxt);
     //         f(&mut packet);
