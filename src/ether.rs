@@ -75,7 +75,7 @@ where
 
     /// Returns the Type field of the header
     pub fn get_type(&self) -> Type {
-        unsafe { NE::read_u16(&self.as_slice().r(TYPE)).into() }
+        NE::read_u16(&self.header()[TYPE]).into()
     }
 
     /// View into the payload
@@ -103,6 +103,12 @@ where
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
     }
+
+    fn header(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
 }
 
 impl<B> Frame<B>
@@ -112,17 +118,17 @@ where
     /* Setters */
     /// Sets the destination field of the header
     pub fn set_destination(&mut self, addr: mac::Addr) {
-        self.as_mut_slice()[DESTINATION].copy_from_slice(&addr.0)
+        self.header_mut()[DESTINATION].copy_from_slice(&addr.0)
     }
 
     /// Sets the source field of the header
     pub fn set_source(&mut self, addr: mac::Addr) {
-        self.as_mut_slice()[SOURCE].copy_from_slice(&addr.0)
+        self.header_mut()[SOURCE].copy_from_slice(&addr.0)
     }
 
     /// Sets the type field of the header
     pub fn set_type(&mut self, type_: Type) {
-        NE::write_u16(&mut self.as_mut_slice()[TYPE], type_.into())
+        NE::write_u16(&mut self.header_mut()[TYPE], type_.into())
     }
 
     /* Miscellaneous */
@@ -134,6 +140,12 @@ where
     /* Private */
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
+    }
+
+    fn header_mut(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
     }
 }
 
