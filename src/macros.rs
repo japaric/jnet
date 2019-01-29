@@ -129,17 +129,13 @@ macro_rules! full_range {
     };
 }
 
-#[cfg(debug_assertions)]
 macro_rules! debug_unreachable {
     () => {
-        unreachable!()
-    };
-}
-
-#[cfg(not(debug_assertions))]
-macro_rules! debug_unreachable {
-    () => {
-        core::hint::unreachable_unchecked()
+        if cfg!(debug_assertions) {
+            unreachable!()
+        } else {
+            core::hint::unreachable_unchecked()
+        }
     };
 }
 
