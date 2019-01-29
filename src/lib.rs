@@ -117,7 +117,7 @@ pub mod arp;
 // Network layer
 pub mod ipv4;
 pub mod ipv6;
-// pub mod sixlowpan;
+pub mod sixlowpan;
 
 pub mod icmp;
 pub mod icmpv6;
