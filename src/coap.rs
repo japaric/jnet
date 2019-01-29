@@ -56,7 +56,7 @@ mod delta {
 }
 
 /// Size of a CoAP header
-pub const HEADER_SIZE: u16 = MESSAGE_ID.end as u16;
+pub const HEADER_SIZE: u8 = MESSAGE_ID.end as u8;
 
 /* Option parsing */
 // This marks the end of the options
@@ -129,29 +129,31 @@ where
     ///
     /// As per RFC 7252 this always returns 1
     pub fn get_version(&self) -> u8 {
-        unsafe { get!(self.as_slice().gu(VER_T_TKL), ver) }
+        debug_assert_eq!(get!(self.header()[VER_T_TKL], ver), 1);
+
+        1
     }
 
     /// Returns the Type field of the header
     pub fn get_type(&self) -> Type {
-        unsafe { Type::from(get!(self.as_slice().gu(VER_T_TKL), t)) }
+        Type::from(get!(self.header()[VER_T_TKL], t))
     }
 
     /// Returns the Token Length (TKL) field of the header
     ///
     /// As per RFC 7252 this always returns a value in the range `0..=8`
     pub fn get_token_length(&self) -> u8 {
-        unsafe { get!(self.as_slice().gu(VER_T_TKL), tkl) }
+        get!(self.header()[VER_T_TKL], tkl)
     }
 
     /// Returns the Code field of the header
     pub fn get_code(&self) -> Code {
-        unsafe { Code(*self.as_slice().gu(CODE)) }
+        Code(self.header()[CODE])
     }
 
     /// Returns the Message ID field of the header
     pub fn get_message_id(&self) -> u16 {
-        unsafe { NE::read_u16(self.as_slice().r(MESSAGE_ID)) }
+        NE::read_u16(&self.header()[MESSAGE_ID])
     }
 
     /// View into the Token field of the header
@@ -194,9 +196,15 @@ where
         self.buffer.as_slice()
     }
 
+    fn header(&self) -> &[u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &*(self.as_slice().as_ptr() as *const _) }
+    }
+
     /// Returns the index at which the options start
-    fn options_start(&self) -> u16 {
-        HEADER_SIZE + u16(self.get_token_length())
+    fn options_start(&self) -> u8 {
+        HEADER_SIZE + self.get_token_length()
     }
 
     unsafe fn unchecked(buffer: B) -> Self {
@@ -219,30 +227,36 @@ where
     where
         C: Into<Code>,
     {
-        self.as_mut_slice()[CODE] = code.into().0;
+        self.header_mut()[CODE] = code.into().0;
     }
 
     /// Sets the Message ID field of the header
     pub fn set_message_id(&mut self, id: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[MESSAGE_ID], id)
+        NE::write_u16(&mut self.header_mut()[MESSAGE_ID], id)
     }
 
     /// Sets the Type field of the header
     pub fn set_type(&mut self, ty: Type) {
         let ty: u8 = ty.into();
-        set!(self.as_mut_slice()[VER_T_TKL], t, ty);
+        set!(self.header_mut()[VER_T_TKL], t, ty);
     }
 
     /// Mutable view into the Token field
     pub fn token_mut(&mut self) -> &mut [u8] {
         let start = TOKEN_START;
         let end = start + self.get_token_length() as usize;
-        &mut self.as_mut_slice()[start..end]
+        unsafe { self.as_mut_slice().rm(start..end) }
     }
 
     /* Private */
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
+    }
+
+    fn header_mut(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+        debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
+
+        unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
     }
 
     unsafe fn set_token_length(&mut self, tkl: u8) {
@@ -274,7 +288,7 @@ where
         let tkl = m.get_token_length();
         let bytes = m.buffer;
 
-        let opts_start = HEADER_SIZE + u16(tkl);
+        let opts_start = HEADER_SIZE + tkl;
         if len < usize(opts_start) {
             // smaller than header + token
             return Err(bytes);
@@ -416,7 +430,7 @@ where
     pub fn new(buffer: B, token_length: u8) -> Self {
         assert!(token_length <= 8);
         let len = buffer.as_slice().len();
-        let marker = HEADER_SIZE + u16(token_length);
+        let marker = u16(HEADER_SIZE + token_length);
         assert!(len >= usize(marker));
 
         unsafe {
@@ -503,7 +517,7 @@ where
     /// Removes all the options this message has
     pub fn clear_options(&mut self) {
         self.number = 0;
-        self.marker = self.options_start();
+        self.marker = u16(self.options_start());
     }
 }
 
