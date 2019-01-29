@@ -129,31 +129,31 @@ where
     ///
     /// As per RFC 7252 this always returns 1
     pub fn get_version(&self) -> u8 {
-        debug_assert_eq!(get!(self.header()[VER_T_TKL], ver), 1);
+        debug_assert_eq!(get!(self.header_()[VER_T_TKL], ver), 1);
 
         1
     }
 
     /// Returns the Type field of the header
     pub fn get_type(&self) -> Type {
-        Type::from(get!(self.header()[VER_T_TKL], t))
+        Type::from(get!(self.header_()[VER_T_TKL], t))
     }
 
     /// Returns the Token Length (TKL) field of the header
     ///
     /// As per RFC 7252 this always returns a value in the range `0..=8`
     pub fn get_token_length(&self) -> u8 {
-        get!(self.header()[VER_T_TKL], tkl)
+        get!(self.header_()[VER_T_TKL], tkl)
     }
 
     /// Returns the Code field of the header
     pub fn get_code(&self) -> Code {
-        Code(self.header()[CODE])
+        Code(self.header_()[CODE])
     }
 
     /// Returns the Message ID field of the header
     pub fn get_message_id(&self) -> u16 {
-        NE::read_u16(&self.header()[MESSAGE_ID])
+        NE::read_u16(&self.header_()[MESSAGE_ID])
     }
 
     /// View into the Token field of the header
@@ -196,7 +196,7 @@ where
         self.buffer.as_slice()
     }
 
-    fn header(&self) -> &[u8; HEADER_SIZE as usize] {
+    fn header_(&self) -> &[u8; HEADER_SIZE as usize] {
         debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
 
         unsafe { &*(self.as_slice().as_ptr() as *const _) }
@@ -227,18 +227,18 @@ where
     where
         C: Into<Code>,
     {
-        self.header_mut()[CODE] = code.into().0;
+        self.header_mut_()[CODE] = code.into().0;
     }
 
     /// Sets the Message ID field of the header
     pub fn set_message_id(&mut self, id: u16) {
-        NE::write_u16(&mut self.header_mut()[MESSAGE_ID], id)
+        NE::write_u16(&mut self.header_mut_()[MESSAGE_ID], id)
     }
 
     /// Sets the Type field of the header
     pub fn set_type(&mut self, ty: Type) {
         let ty: u8 = ty.into();
-        set!(self.header_mut()[VER_T_TKL], t, ty);
+        set!(self.header_mut_()[VER_T_TKL], t, ty);
     }
 
     /// Mutable view into the Token field
@@ -253,7 +253,7 @@ where
         self.buffer.as_mut_slice()
     }
 
-    fn header_mut(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+    fn header_mut_(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
         debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
 
         unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }

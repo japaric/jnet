@@ -317,7 +317,7 @@ where
         if typeid!(H == Ethernet) {
             HardwareType::Ethernet
         } else {
-            NE::read_u16(&self.header()[HTYPE]).into()
+            NE::read_u16(&self.header_()[HTYPE]).into()
         }
     }
 
@@ -326,7 +326,7 @@ where
         if typeid!(P == Ipv4) {
             ether::Type::Ipv4
         } else {
-            NE::read_u16(&self.header()[PTYPE]).into()
+            NE::read_u16(&self.header_()[PTYPE]).into()
         }
     }
 
@@ -335,7 +335,7 @@ where
         if typeid!(H == Ethernet) {
             6
         } else {
-            self.header()[HLEN]
+            self.header_()[HLEN]
         }
     }
 
@@ -344,13 +344,13 @@ where
         if typeid!(P == Ipv4) {
             4
         } else {
-            self.header()[PLEN]
+            self.header_()[PLEN]
         }
     }
 
     /// Returns the OPER (OPERation) field of the header
     pub fn get_oper(&self) -> Operation {
-        NE::read_u16(&self.header()[OPER]).into()
+        NE::read_u16(&self.header_()[OPER]).into()
     }
 
     /// View into the payload
@@ -374,7 +374,7 @@ where
     }
 
     /* Private */
-    fn header(&self) -> &[u8; 8] {
+    fn header_(&self) -> &[u8; 8] {
         debug_assert!(self.as_slice().len() >= 8);
 
         unsafe { &*(self.as_slice().as_ptr() as *const _) }

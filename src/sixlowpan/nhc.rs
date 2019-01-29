@@ -54,7 +54,7 @@ where
         let mut p = UdpPacket { buffer, payload: 0 };
 
         // check NHC ID
-        if get!(p.header(), id) != id::VALUE {
+        if get!(p.header_(), id) != id::VALUE {
             return Err(p.buffer);
         }
 
@@ -124,12 +124,12 @@ where
 
     /// Reads the 'Checksum' NHC field
     pub fn get_c(&self) -> bool {
-        get!(self.header(), c) != 0
+        get!(self.header_(), c) != 0
     }
 
     /// Reads the 'Ports' NHC field
     pub fn get_p(&self) -> u8 {
-        get!(self.header(), p)
+        get!(self.header_(), p)
     }
 
     /* Private */
@@ -189,7 +189,7 @@ where
         !(sum as u16)
     }
 
-    fn header(&self) -> u8 {
+    fn header_(&self) -> u8 {
         unsafe { *self.as_slice().gu(NHC) }
     }
 
@@ -271,11 +271,11 @@ where
 
     /* Private */
     fn set_c(&mut self, c: u8) {
-        set!(*self.header_mut(), c, c)
+        set!(*self.header_mut_(), c, c)
     }
 
     fn set_p(&mut self, p: u8) {
-        set!(*self.header_mut(), p, p)
+        set!(*self.header_mut_(), p, p)
     }
 
     unsafe fn set_checksum(&mut self, cksum: u16) {
@@ -289,7 +289,7 @@ where
         self.buffer.as_mut_slice()
     }
 
-    fn header_mut(&mut self) -> &mut u8 {
+    fn header_mut_(&mut self) -> &mut u8 {
         unsafe { self.as_mut_slice().gum(NHC) }
     }
 }

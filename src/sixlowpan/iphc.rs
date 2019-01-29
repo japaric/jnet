@@ -672,34 +672,34 @@ where
 
     /* Private */
     fn set_nh(&mut self, nh: u8) {
-        set!(self.header_mut()[IPHC0], nh, nh);
+        set!(self.header_mut_()[IPHC0], nh, nh);
     }
 
     fn set_hlim(&mut self, hlim: u8) {
-        set!(self.header_mut()[IPHC0], hlim, hlim);
+        set!(self.header_mut_()[IPHC0], hlim, hlim);
     }
 
     fn set_sac(&mut self, sac: u8) {
-        set!(self.header_mut()[IPHC1], sac, sac);
+        set!(self.header_mut_()[IPHC1], sac, sac);
     }
 
     fn set_sam(&mut self, sam: u8) {
-        set!(self.header_mut()[IPHC1], sam, sam);
+        set!(self.header_mut_()[IPHC1], sam, sam);
     }
 
     fn set_m(&mut self, m: u8) {
-        set!(self.header_mut()[IPHC1], m, m);
+        set!(self.header_mut_()[IPHC1], m, m);
     }
 
     fn set_dam(&mut self, dam: u8) {
-        set!(self.header_mut()[IPHC1], dam, dam);
+        set!(self.header_mut_()[IPHC1], dam, dam);
     }
 
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
     }
 
-    fn header_mut(&mut self) -> &mut [u8; 2] {
+    fn header_mut_(&mut self) -> &mut [u8; 2] {
         debug_assert!(self.buffer.as_slice().len() >= 2);
 
         unsafe { &mut *(self.buffer.as_slice().as_ptr() as *mut _) }

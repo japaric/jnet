@@ -96,17 +96,17 @@ where
     /* Getters */
     /// Reads the 'Type' field
     pub fn get_type(&self) -> Type {
-        Type::from(self.header()[TYPE])
+        Type::from(self.header_()[TYPE])
     }
 
     /// Reads the 'Code' field
     pub fn get_code(&self) -> u8 {
-        self.header()[CODE]
+        self.header_()[CODE]
     }
 
     /// Reads the 'Checksum' field
     pub fn get_checksum(&self) -> u16 {
-        NE::read_u16(&self.header()[CHECKSUM])
+        NE::read_u16(&self.header_()[CHECKSUM])
     }
 
     /// Returns the byte representation of this frame
@@ -175,7 +175,7 @@ where
         self.buffer.as_slice()
     }
 
-    fn header(&self) -> &[u8; HEADER_SIZE as usize] {
+    fn header_(&self) -> &[u8; HEADER_SIZE as usize] {
         debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
 
         unsafe { &*(self.as_slice().as_ptr() as *const _) }
@@ -193,14 +193,14 @@ where
     }
 
     fn set_checksum(&mut self, checksum: u16) {
-        NE::write_u16(&mut self.header_mut()[CHECKSUM], checksum);
+        NE::write_u16(&mut self.header_mut_()[CHECKSUM], checksum);
     }
 
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
     }
 
-    fn header_mut(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
+    fn header_mut_(&mut self) -> &mut [u8; HEADER_SIZE as usize] {
         debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
 
         unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
@@ -234,11 +234,11 @@ where
     B: AsMutSlice<Element = u8>,
 {
     fn set_type(&mut self, ty: Type) {
-        self.header_mut()[TYPE] = ty.into();
+        self.header_mut_()[TYPE] = ty.into();
     }
 
     fn set_code(&mut self, code: u8) {
-        self.header_mut()[CODE] = code;
+        self.header_mut_()[CODE] = code;
     }
 }
 
