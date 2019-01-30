@@ -134,22 +134,30 @@ where
     /* Setters */
     /// Sets the SHA (Sender Hardware Address) field of the payload
     pub fn set_sha(&mut self, sha: mac::Addr) {
-        self.as_mut_slice()[SHA].copy_from_slice(&sha.0);
+        unsafe {
+            self.as_mut_slice().rm(SHA).copy_from_slice(&sha.0);
+        }
     }
 
     /// Sets the SPA (Sender Protocol Address) field of the payload
     pub fn set_spa(&mut self, spa: ipv4::Addr) {
-        self.as_mut_slice()[SPA].copy_from_slice(&spa.0);
+        unsafe {
+            self.as_mut_slice().rm(SPA).copy_from_slice(&spa.0);
+        }
     }
 
     /// Sets the THA (Target Hardware Address) field of the payload
     pub fn set_tha(&mut self, tha: mac::Addr) {
-        self.as_mut_slice()[THA].copy_from_slice(&tha.0);
+        unsafe {
+            self.as_mut_slice().rm(THA).copy_from_slice(&tha.0);
+        }
     }
 
     /// Sets the TPA (Target Protocol Address) field of the payload
     pub fn set_tpa(&mut self, tpa: ipv4::Addr) {
-        self.as_mut_slice()[TPA].copy_from_slice(&tpa.0);
+        unsafe {
+            self.as_mut_slice().rm(TPA).copy_from_slice(&tpa.0);
+        }
     }
 
     /* Miscellaneous */

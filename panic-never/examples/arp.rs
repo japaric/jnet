@@ -5,7 +5,7 @@ use cortex_m::asm;
 use cortex_m_rt::{entry, exception};
 use panic_never::force_eval;
 
-use jnet::arp;
+use jnet::{arp, mac, ipv4};
 
 const LEN: usize = 128;
 static mut BUFFER: [u8; LEN] = [0; LEN];
@@ -32,12 +32,17 @@ unsafe fn SysTick() {
 
 #[exception]
 unsafe fn SVCall() {
-    if let Some(p) = PACKET.take() {
+    if let Some(mut p) = PACKET.take() {
         force_eval!(p.get_sha());
         force_eval!(p.get_spa());
         force_eval!(p.get_tha());
         force_eval!(p.get_tpa());
         force_eval!(p.is_a_probe());
+
+        force_eval!(p.set_sha(mac::Addr::BROADCAST));
+        force_eval!(p.set_spa(ipv4::Addr::UNSPECIFIED));
+        force_eval!(p.set_tha(mac::Addr::BROADCAST));
+        force_eval!(p.set_tpa(ipv4::Addr::UNSPECIFIED));
     }
 }
 
