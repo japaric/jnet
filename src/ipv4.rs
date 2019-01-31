@@ -503,7 +503,7 @@ where
     /* Miscellaneous */
     /// Updates the Checksum field of the header
     pub fn update_checksum(mut self) -> Packet<B, Valid> {
-        let cksum = compute_checksum(&self.as_slice()[..usize(self.header_len())], CHECKSUM.start);
+        let cksum = compute_checksum(&self.header(), CHECKSUM.start);
         NE::write_u16(&mut self.header_mut_()[CHECKSUM], cksum);
 
         Packet {
