@@ -28,6 +28,20 @@ main() {
         fi
     elif [ $TARGET = thumbv7m-none-eabi ]; then
         ( cd panic-never && cargo build --examples --release )
+
+        if [ $TRAVIS_RUST_VERSION = nightly ]; then
+            pushd firmware
+            local examples=(
+                hello
+                ipv4
+            )
+
+            cargo build --target $TARGET --examples --release
+            cd target/$TARGET/release/examples/
+            size ${examples[@]}
+            size -A ${examples[@]}
+            popd
+        fi
     fi
 }
 

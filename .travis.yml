@@ -8,6 +8,10 @@ matrix:
     - env: TARGET=thumbv7m-none-eabi
       if: (branch = staging OR branch = trying) OR (type = pull_request AND branch = master)
 
+    - env: TARGET=thumbv7m-none-eabi
+      if: (branch = staging OR branch = trying) OR (type = pull_request AND branch = master)
+      rust: nightly
+
     - env: TARGET=rustfmt
       if: (branch = staging OR branch = trying) OR (type = pull_request AND branch = master)
 
