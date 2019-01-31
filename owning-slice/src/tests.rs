@@ -53,7 +53,7 @@ fn slice_mut() {
 #[test]
 fn owning_slice() {
     let array = &[0xff, 0, 1, 2, 3, 0xff];
-    let slice = OwningSlice(array, 1, 4);
+    let slice = OwningSlice(array, 1u8, 4);
 
     sanity!(slice);
 }
@@ -61,7 +61,7 @@ fn owning_slice() {
 #[test]
 fn owning_slice_from() {
     let array = &[0xff, 0, 1, 2, 3];
-    let slice_from = OwningSliceFrom(array, 1);
+    let slice_from = OwningSliceFrom(array, 1u8);
 
     sanity!(slice_from);
 }
@@ -69,7 +69,7 @@ fn owning_slice_from() {
 #[test]
 fn owning_slice_to() {
     let array = &[0, 1, 2, 3, 0xff];
-    let slice_to = OwningSliceTo(array, 4);
+    let slice_to = OwningSliceTo(array, 4u8);
 
     sanity!(slice_to);
 }
