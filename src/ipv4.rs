@@ -1123,7 +1123,10 @@ impl Protocol {
 pub(crate) fn compute_checksum(header: &[u8], cksum_pos: usize) -> u16 {
     let mut sum = 0u32;
     let skip = cksum_pos / 2;
-    for (i, chunk) in header.chunks(2).enumerate() {
+
+    // Header length is always even
+    debug_assert_eq!(header.len() % 2, 0);
+    for (i, chunk) in header.chunks_exact(2).enumerate() {
         if i == skip {
             // skip checksum field
             continue;
