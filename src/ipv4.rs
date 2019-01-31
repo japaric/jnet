@@ -288,12 +288,12 @@ where
 
 impl<B, C> Packet<B, C>
 where
-    B: AsSlice<Element = u8> + IntoSliceFrom<u16>,
+    B: AsSlice<Element = u8> + IntoSliceFrom<u8>,
 {
     /* Miscellaneous */
     /// Returns the payload of this frame
-    pub fn into_payload(self) -> B::OutputF {
-        let offset = u16(self.header_len());
+    pub fn into_payload(self) -> B::SliceFrom {
+        let offset = self.header_len();
         self.buffer.into_slice_from(offset)
     }
 }
@@ -503,7 +503,7 @@ where
     /* Miscellaneous */
     /// Updates the Checksum field of the header
     pub fn update_checksum(mut self) -> Packet<B, Valid> {
-        let cksum = compute_checksum(&self.as_slice()[..usize(self.header_len())], CHECKSUM.start);
+        let cksum = compute_checksum(&self.header(), CHECKSUM.start);
         NE::write_u16(&mut self.header_mut_()[CHECKSUM], cksum);
 
         Packet {
@@ -1123,7 +1123,10 @@ impl Protocol {
 pub(crate) fn compute_checksum(header: &[u8], cksum_pos: usize) -> u16 {
     let mut sum = 0u32;
     let skip = cksum_pos / 2;
-    for (i, chunk) in header.chunks(2).enumerate() {
+
+    // Header length is always even
+    debug_assert_eq!(header.len() % 2, 0);
+    for (i, chunk) in header.chunks_exact(2).enumerate() {
         if i == skip {
             // skip checksum field
             continue;

@@ -39,48 +39,6 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    /// Equivalent to `self[start..start+length]` but by value
-    pub fn into_slice(self, start: I, length: I) -> OwningSlice<B, I> {
-        let len = self.len();
-        let ustart = start.into();
-        let ulength = length.into();
-
-        assert!(ustart + ulength <= len);
-
-        OwningSlice {
-            buffer: self.buffer,
-            start: self.start + start,
-            length,
-        }
-    }
-
-    /// Equivalent to `self[start..]` but by value
-    pub fn into_slice_from(self, start: I) -> OwningSliceFrom<B, I> {
-        let len = self.len();
-        let ustart = start.into();
-
-        assert!(ustart <= len);
-
-        OwningSliceFrom {
-            buffer: self.buffer,
-            start: self.start + start,
-        }
-    }
-
-    /// Equivalent to `self[..end]` but by value
-    pub fn into_slice_to(self, end: I) -> OwningSlice<B, I> {
-        let len = self.len();
-        let uend = end.into();
-
-        assert!(uend <= len);
-
-        OwningSlice {
-            buffer: self.buffer,
-            start: self.start,
-            length: end,
-        }
-    }
-
     /// Destroys the owning slice and returns the original buffer
     pub fn unslice(self) -> B {
         self.buffer
@@ -157,10 +115,59 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    type Output = OwningSlice<B, I>;
+    type Slice = OwningSlice<B, I>;
 
-    fn into_slice(self, start: I, length: I) -> Self::Output {
-        self.into_slice(start, length)
+    fn into_slice(self, start: I, length: I) -> Self::Slice {
+        let len = self.len();
+        let ustart = start.into();
+        let ulength = length.into();
+
+        assert!(ustart + ulength <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start: self.start + start,
+            length,
+        }
+    }
+}
+
+impl<B> IntoSlice<u16> for OwningSliceFrom<B, u8>
+where
+    B: AsSlice,
+{
+    type Slice = OwningSlice<B, u8>;
+
+    fn into_slice(self, start: u16, length: u16) -> Self::Slice {
+        let len = self.len();
+
+        assert!(usize::from(start) + usize::from(length) <= len);
+
+        // NOTE(cast) start, length < len <= u8::MAX
+        OwningSlice {
+            buffer: self.buffer,
+            start: self.start + start as u8,
+            length: length as u8,
+        }
+    }
+}
+
+impl<B> IntoSlice<u8> for OwningSliceFrom<B, u16>
+where
+    B: AsSlice,
+{
+    type Slice = OwningSlice<B, u16>;
+
+    fn into_slice(self, start: u8, length: u8) -> Self::Slice {
+        let len = self.len();
+
+        assert!(usize::from(start) + usize::from(length) <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start: self.start + u16::from(start),
+            length: u16::from(length),
+        }
     }
 }
 
@@ -169,10 +176,39 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    type OutputF = OwningSliceFrom<B, I>;
+    type SliceFrom = OwningSliceFrom<B, I>;
 
-    fn into_slice_from(self, start: I) -> Self::OutputF {
-        self.into_slice_from(start)
+    fn into_slice_from(self, start: I) -> Self::SliceFrom {
+        let len = self.len();
+        let ustart = start.into();
+
+        assert!(ustart <= len);
+
+        OwningSliceFrom {
+            buffer: self.buffer,
+            start: self.start + start,
+        }
+    }
+}
+
+// we can't impl this because `self.len()` is unbounded (could be greater than `u8::MAX`)
+// impl<B> IntoSliceFrom<u16> for OwningSliceFrom<B, u8> where B: AsSlice {}
+
+impl<B> IntoSliceFrom<u8> for OwningSliceFrom<B, u16>
+where
+    B: AsSlice,
+{
+    type SliceFrom = OwningSliceFrom<B, u16>;
+
+    fn into_slice_from(self, start: u8) -> Self::SliceFrom {
+        let len = self.len();
+
+        assert!(usize::from(start) <= len);
+
+        OwningSliceFrom {
+            buffer: self.buffer,
+            start: self.start + u16::from(start),
+        }
     }
 }
 
@@ -181,9 +217,40 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    type OutputT = OwningSlice<B, I>;
+    type SliceTo = OwningSlice<B, I>;
 
-    fn into_slice_to(self, end: I) -> Self::OutputT {
-        self.into_slice_to(end)
+    fn into_slice_to(self, end: I) -> Self::SliceTo {
+        let len = self.len();
+        let uend = end.into();
+
+        assert!(uend <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start: self.start,
+            length: end,
+        }
+    }
+}
+
+// we can't impl this because `self.len()` is unbounded (could be greater than u8::MAX)
+// impl<B> IntoSliceTo<u16> for OwningSliceFrom<B, u8> where B: AsSlice {}
+
+impl<B> IntoSliceTo<u8> for OwningSliceFrom<B, u16>
+where
+    B: AsSlice,
+{
+    type SliceTo = OwningSlice<B, u16>;
+
+    fn into_slice_to(self, end: u8) -> Self::SliceTo {
+        let len = self.len();
+
+        assert!(usize::from(end) <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start: self.start,
+            length: u16::from(end),
+        }
     }
 }
