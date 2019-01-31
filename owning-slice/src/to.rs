@@ -39,59 +39,6 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    /// Equivalent to `self[start..start+length]` but by value
-    pub fn into_slice(self, start: I, length: I) -> OwningSlice<B, I> {
-        let len = self.len();
-        let ustart = start.into();
-        let ulength = length.into();
-
-        assert!(ustart + ulength <= len);
-
-        OwningSlice {
-            buffer: self.buffer,
-            start,
-            length,
-        }
-    }
-
-    /// Equivalent to `self[start..]` but by value
-    pub fn into_slice_from(self, start: I) -> OwningSlice<B, I> {
-        let len = self.len();
-        let ustart = start.into();
-
-        assert!(ustart <= len);
-
-        OwningSlice {
-            buffer: self.buffer,
-            start,
-            length: self.end - start,
-        }
-    }
-
-    /// Equivalent to `self[..end]` but by value
-    pub fn into_slice_to(self, end: I) -> OwningSliceTo<B, I> {
-        let len = self.len();
-        let uend = end.into();
-
-        assert!(uend <= len);
-
-        OwningSliceTo {
-            buffer: self.buffer,
-            end,
-        }
-    }
-
-    /// Truncates the owning slice to the specified `len`
-    pub fn truncate<L>(&mut self, len: L)
-    where
-        L: Into<I>,
-    {
-        let len = len.into();
-        if len < self.end {
-            self.end = len;
-        }
-    }
-
     /// Destroys the owning slice and returns the original buffer
     pub fn unslice(self) -> B {
         self.buffer
@@ -164,10 +111,60 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    type Output = OwningSlice<B, I>;
+    type Slice = OwningSlice<B, I>;
 
-    fn into_slice(self, start: I, length: I) -> Self::Output {
-        self.into_slice(start, length)
+    fn into_slice(self, start: I, length: I) -> Self::Slice {
+        let len = self.len();
+        let ustart = start.into();
+        let ulength = length.into();
+
+        assert!(ustart + ulength <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start,
+            length,
+        }
+    }
+}
+
+impl<B> IntoSlice<u16> for OwningSliceTo<B, u8>
+where
+    B: AsSlice,
+{
+    type Slice = OwningSlice<B, u8>;
+
+    fn into_slice(self, start: u16, length: u16) -> Self::Slice {
+        let len = self.len();
+
+        assert!(usize::from(start) + usize::from(length) <= len);
+
+        // NOTE(cast) start, length < self.len() (self.end) <= u8::MAX
+        OwningSlice {
+            buffer: self.buffer,
+            start: start as u8,
+            length: length as u8,
+        }
+    }
+}
+
+impl<B> IntoSlice<u8> for OwningSliceTo<B, u16>
+where
+    B: AsSlice,
+{
+    type Slice = OwningSlice<B, u16>;
+
+    fn into_slice(self, start: u8, length: u8) -> Self::Slice {
+        let len = self.len();
+
+        assert!(usize::from(start) + usize::from(length) <= len);
+
+        // NOTE(cast) start, length < self.len() (self.end) <= u8::MAX
+        OwningSlice {
+            buffer: self.buffer,
+            start: u16::from(start),
+            length: u16::from(length),
+        }
     }
 }
 
@@ -176,10 +173,57 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    type OutputF = OwningSlice<B, I>;
+    type SliceFrom = OwningSlice<B, I>;
 
-    fn into_slice_from(self, start: I) -> Self::OutputF {
-        self.into_slice_from(start)
+    fn into_slice_from(self, start: I) -> Self::SliceFrom {
+        let len = self.len();
+
+        assert!(start.into() <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start,
+            length: self.end - start,
+        }
+    }
+}
+
+impl<B> IntoSliceFrom<u16> for OwningSliceTo<B, u8>
+where
+    B: AsSlice,
+{
+    type SliceFrom = OwningSlice<B, u8>;
+
+    fn into_slice_from(self, start: u16) -> Self::SliceFrom {
+        let len = self.len();
+
+        assert!(usize::from(start) <= len);
+
+        // NOTE(cast) start < self.len() (self.end) <= u8::MAX
+        OwningSlice {
+            buffer: self.buffer,
+            start: start as u8,
+            length: self.end - start as u8,
+        }
+    }
+}
+
+impl<B> IntoSliceFrom<u8> for OwningSliceTo<B, u16>
+where
+    B: AsSlice,
+{
+    type SliceFrom = OwningSlice<B, u16>;
+
+    fn into_slice_from(self, start: u8) -> Self::SliceFrom {
+        let len = self.len();
+
+        assert!(usize::from(start) <= len);
+
+        OwningSlice {
+            buffer: self.buffer,
+            start: u16::from(start),
+            length: self.end - u16::from(start),
+        }
     }
 }
 
@@ -188,20 +232,89 @@ where
     B: AsSlice,
     I: sealed::Index,
 {
-    type OutputT = OwningSliceTo<B, I>;
+    type SliceTo = OwningSliceTo<B, I>;
 
-    fn into_slice_to(self, end: I) -> Self::OutputT {
-        self.into_slice_to(end)
+    fn into_slice_to(self, end: I) -> Self::SliceTo {
+        let len = self.len();
+
+        assert!(end.into() <= len);
+
+        OwningSliceTo {
+            buffer: self.buffer,
+            end,
+        }
     }
 }
 
-impl<B, I, L> Truncate<L> for OwningSliceTo<B, I>
+impl<B> IntoSliceTo<u16> for OwningSliceTo<B, u8>
+where
+    B: AsSlice,
+{
+    type SliceTo = OwningSliceTo<B, u8>;
+
+    fn into_slice_to(self, end: u16) -> Self::SliceTo {
+        let len = self.len();
+
+        assert!(usize::from(end) <= len);
+
+        // NOTE(cast) end <= self.len() (self.end) <= u8::MAX
+        OwningSliceTo {
+            buffer: self.buffer,
+            end: end as u8,
+        }
+    }
+}
+
+impl<B> IntoSliceTo<u8> for OwningSliceTo<B, u16>
+where
+    B: AsSlice,
+{
+    type SliceTo = OwningSliceTo<B, u16>;
+
+    fn into_slice_to(self, end: u8) -> Self::SliceTo {
+        let len = self.len();
+
+        assert!(usize::from(end) <= len);
+
+        OwningSliceTo {
+            buffer: self.buffer,
+            end: u16::from(end),
+        }
+    }
+}
+
+impl<B, I> Truncate<I> for OwningSliceTo<B, I>
 where
     B: AsSlice,
     I: sealed::Index,
-    L: Into<I>,
 {
-    fn truncate(&mut self, len: L) {
-        self.truncate(len)
+    fn truncate(&mut self, len: I) {
+        if len < self.end {
+            self.end = len;
+        }
+    }
+}
+
+impl<B> Truncate<u16> for OwningSliceTo<B, u8>
+where
+    B: AsSlice,
+{
+    fn truncate(&mut self, len: u16) {
+        if len < u16::from(self.end) {
+            self.end = len as u8;
+        }
+    }
+}
+
+impl<B> Truncate<u8> for OwningSliceTo<B, u16>
+where
+    B: AsSlice,
+{
+    fn truncate(&mut self, len: u8) {
+        let len = u16::from(len);
+
+        if len < self.end {
+            self.end = len;
+        }
     }
 }
