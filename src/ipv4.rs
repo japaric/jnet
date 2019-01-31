@@ -288,12 +288,12 @@ where
 
 impl<B, C> Packet<B, C>
 where
-    B: AsSlice<Element = u8> + IntoSliceFrom<u16>,
+    B: AsSlice<Element = u8> + IntoSliceFrom<u8>,
 {
     /* Miscellaneous */
     /// Returns the payload of this frame
-    pub fn into_payload(self) -> B::OutputF {
-        let offset = u16(self.header_len());
+    pub fn into_payload(self) -> B::SliceFrom {
+        let offset = self.header_len();
         self.buffer.into_slice_from(offset)
     }
 }

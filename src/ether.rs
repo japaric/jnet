@@ -151,11 +151,11 @@ where
 
 impl<B> Frame<B>
 where
-    B: AsSlice<Element = u8> + IntoSliceFrom<u16>,
+    B: AsSlice<Element = u8> + IntoSliceFrom<u8>,
 {
     /// Returns the payload of this frame
-    pub fn into_payload(self) -> B::OutputF {
-        self.buffer.into_slice_from(u16(HEADER_SIZE))
+    pub fn into_payload(self) -> B::SliceFrom {
+        self.buffer.into_slice_from(HEADER_SIZE)
     }
 }
 
