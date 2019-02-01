@@ -229,10 +229,12 @@ full_range!(
     pub enum Type {
         /// IPv4
         Ipv4 = 0x0800,
+
         /// ARP
         Arp = 0x0806,
+
         /// IPv6
-        Ipv6 = 0x08DD,
+        Ipv6 = 0x86DD,
     }
 );
 
