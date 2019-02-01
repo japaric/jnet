@@ -87,6 +87,7 @@
 #![deny(rust_2018_idioms)]
 #![deny(unsafe_code)]
 #![deny(warnings)]
+#![feature(never_type)]
 #![feature(proc_macro_hygiene)]
 #![no_main]
 #![no_std]
@@ -95,30 +96,20 @@
 extern crate panic_abort;
 // extern crate panic_semihosting; // alternative panic handler
 
+use blue_pill::{Ethernet, Led, ARP_CACHE_SIZE, IP, MAC};
 use cast::usize;
-use cortex_m::interrupt;
 use cortex_m_rt::entry;
-use enc28j60::{Enc28j60, Error};
-use heapless::{consts, FnvIndexMap};
+use heapless::FnvIndexMap;
 use jnet::{arp, ether, icmp, ipv4, mac, udp};
 use stlog::{
     global_logger,
     spanned::{error, info, warning},
 };
-use stm32f103xx_hal::{delay::Delay, prelude::*, spi::Spi, stm32f103xx};
+use stm32f103xx_hal::{prelude::*, stm32f103xx};
 
 #[global_logger]
 static LOGGER: blue_pill::ItmLogger = blue_pill::ItmLogger;
 // static LOGGER: stlog::NullLogger = stlog::NullLogger; // alt: no logs
-
-/* Configuration */
-const MAC: mac::Addr = mac::Addr([0x20, 0x19, 0x01, 0x30, 0x23, 0x59]);
-const IP: ipv4::Addr = ipv4::Addr([192, 168, 1, 33]);
-#[allow(non_camel_case_types)]
-type ARP_CACHE_SIZE = consts::U8;
-
-/* Constants */
-const KB: u16 = 1024; // bytes
 
 #[entry]
 fn main() -> ! {
@@ -127,140 +118,83 @@ fn main() -> ! {
     let core = cortex_m::Peripherals::take().unwrap_or_else(|| {
         error!("cortex_m::Peripherals::take failed");
 
-        fatal();
+        blue_pill::fatal();
     });
 
     let device = stm32f103xx::Peripherals::take().unwrap_or_else(|| {
         error!("stm32f103xx::Peripherals::take failed");
 
-        fatal();
+        blue_pill::fatal();
     });
 
-    let mut rcc = device.RCC.constrain();
-    let mut afio = device.AFIO.constrain(&mut rcc.apb2);
-    let mut flash = device.FLASH.constrain();
-    let mut gpioa = device.GPIOA.split(&mut rcc.apb2);
+    let (ethernet, led) = blue_pill::init(core, device);
 
-    let clocks = rcc.cfgr.freeze(&mut flash.acr);
+    run(ethernet, led).unwrap_or_else(|| {
+        error!("`run` failed");
 
-    // LED
-    let mut gpioc = device.GPIOC.split(&mut rcc.apb2);
-    let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
-    // turn the LED off during initialization
-    led.set_high();
-
-    // SPI
-    let mut ncs = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
-    ncs.set_high();
-    let sck = gpioa.pa5.into_alternate_push_pull(&mut gpioa.crl);
-    let miso = gpioa.pa6;
-    let mosi = gpioa.pa7.into_alternate_push_pull(&mut gpioa.crl);
-    let spi = Spi::spi1(
-        device.SPI1,
-        (sck, miso, mosi),
-        &mut afio.mapr,
-        enc28j60::MODE,
-        1.mhz(),
-        clocks,
-        &mut rcc.apb2,
-    );
-
-    // ENC28J60
-    let mut reset = gpioa.pa3.into_push_pull_output(&mut gpioa.crl);
-    reset.set_low(); // held in reset
-    let mut delay = Delay::new(core.SYST, clocks);
-    let mut enc28j60 = Enc28j60::new(
-        spi,
-        ncs,
-        enc28j60::Unconnected,
-        // enc28j60::Unconnected,
-        reset,
-        &mut delay,
-        7 * KB,
-        MAC.0,
-    )
-    .unwrap_or_else(|e| {
-        match e {
-            Error::ErevidIsZero => {
-                error!("EREVID = 0");
-            }
-            _ => {
-                error!("Enc28j60::new failed");
-            }
-        }
-
-        fatal()
+        blue_pill::fatal()
     });
+}
 
-    // LED on after initialization
-    led.set_low();
-
-    info!("Done with initialization");
-
-    (|| -> Option<_> {
-        let mut cache = FnvIndexMap::new();
-        let mut buf = [0; 256];
-        loop {
-            let packet = if let Some(packet) = enc28j60
-                .next_packet()
-                .map_err(|_| error!("Enc28j60::next_packet failed"))
-                .ok()?
-            {
-                if usize(packet.len()) > buf.len() {
-                    error!("packet too big for our buffer");
-                    continue;
-                } else {
-                    packet
-                        .read(&mut buf[..])
-                        .map_err(|_| error!("Packet::read failed"))
-                        .ok()?
-                }
-            } else {
+// main logic
+fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
+    let mut cache = FnvIndexMap::new();
+    let mut buf = [0; 256];
+    loop {
+        let packet = if let Some(packet) = ethernet
+            .next_packet()
+            .map_err(|_| error!("Enc28j60::next_packet failed"))
+            .ok()?
+        {
+            if usize(packet.len()) > buf.len() {
+                error!("packet too big for our buffer");
                 continue;
-            };
-
-            info!("new packet");
-
-            match process(packet, &mut cache) {
-                Action::ArpReply(eth) => {
-                    info!("sending ARP reply");
-                    enc28j60
-                        .transmit(eth.as_bytes())
-                        .map_err(|_| error!("Enc28j60::transmit failed"))
-                        .ok()?;
-                }
-
-                Action::EchoReply(eth) => {
-                    info!("sending 'Echo Reply' ICMP message");
-                    led.toggle();
-                    enc28j60
-                        .transmit(eth.as_bytes())
-                        .map_err(|_| error!("Enc28j60::transmit failed"))
-                        .ok()?;
-                }
-
-                Action::UdpReply(eth) => {
-                    info!("sending UDP packet");
-                    led.toggle();
-                    enc28j60
-                        .transmit(eth.as_bytes())
-                        .map_err(|_| error!("Enc28j60::transmit failed"))
-                        .ok()?;
-                }
-
-                Action::Nop => {}
+            } else {
+                packet
+                    .read(&mut buf[..])
+                    .map_err(|_| error!("Packet::read failed"))
+                    .ok()?
             }
-        }
-    })()
-    .unwrap_or_else(|| {
-        error!("fatal I/O error");
+        } else {
+            continue;
+        };
 
-        fatal()
-    })
+        info!("new packet");
+
+        match on_new_packet(packet, &mut cache) {
+            Action::ArpReply(eth) => {
+                info!("sending ARP reply");
+                ethernet
+                    .transmit(eth.as_bytes())
+                    .map_err(|_| error!("Enc28j60::transmit failed"))
+                    .ok()?;
+            }
+
+            Action::EchoReply(eth) => {
+                info!("sending 'Echo Reply' ICMP message");
+                led.toggle();
+                ethernet
+                    .transmit(eth.as_bytes())
+                    .map_err(|_| error!("Enc28j60::transmit failed"))
+                    .ok()?;
+            }
+
+            Action::UdpReply(eth) => {
+                info!("sending UDP packet");
+                led.toggle();
+                ethernet
+                    .transmit(eth.as_bytes())
+                    .map_err(|_| error!("Enc28j60::transmit failed"))
+                    .ok()?;
+            }
+
+            Action::Nop => {}
+        }
+    }
 }
 
 // IO-less / "pure" logic
-fn process<'a>(
+fn on_new_packet<'a>(
     bytes: &'a mut [u8],
     cache: &mut FnvIndexMap<ipv4::Addr, mac::Addr, ARP_CACHE_SIZE>,
 ) -> Action<'a> {
@@ -421,6 +355,7 @@ fn process<'a>(
                 }
             }
         }
+
         _ => {
             info!("unexpected EtherType");
         }
@@ -434,13 +369,4 @@ enum Action<'a> {
     EchoReply(ether::Frame<&'a mut [u8]>),
     UdpReply(ether::Frame<&'a mut [u8]>),
     Nop,
-}
-
-fn fatal() -> ! {
-    interrupt::disable();
-
-    // (I wish this board had more than one LED)
-    error!("fatal error");
-
-    loop {}
 }
