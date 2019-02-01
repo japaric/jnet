@@ -834,8 +834,10 @@ impl ExtendedAddr {
         let mut bytes = [0; 8];
 
         NE::write_u64(&mut bytes, self.0);
+
         // toggle the universal / local bit
         bytes[0] ^= 1 << 1;
+
         bytes
     }
 }
