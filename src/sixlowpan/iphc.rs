@@ -771,7 +771,6 @@ where
             }
         }
 
-        // TODO uncomment
         // s.field("payload", &self.payload());
         s.finish()
     }

@@ -24,7 +24,7 @@ use owning_slice::Truncate;
 pub use crate::icmp::{EchoReply, EchoRequest};
 use crate::{
     fmt::Quoted,
-    ieee802154, ipv6,
+    ieee802154, ipv6, mac,
     sealed::Echo,
     traits::{TryFrom, TryInto, UncheckedIndex},
     Unknown,
@@ -157,6 +157,11 @@ where
     /// Verifies the 'Checksum' field
     pub fn verify_checksum(&self, src: ipv6::Addr, dest: ipv6::Addr) -> bool {
         self.compute_checksum(src, dest) == self.get_checksum()
+    }
+
+    /// Returns the underlying buffer
+    pub fn free(self) -> B {
+        self.buffer
     }
 
     /* Private */
@@ -319,20 +324,23 @@ where
     type Error = Message<B, Unknown>;
 
     fn try_from(m: Message<B, Unknown>) -> Result<Self, Message<B, Unknown>> {
+        // RFC 4861 - Section 7.1.1.  Validation of Neighbor Solicitations
+        // "ICMP Code is 0"
+        // "ICMP length (derived from the IP length) is 24 or more octets"
         if m.get_type() == Type::NeighborSolicitation
             && m.get_code() == 0
             && m.as_slice().len() >= 24
         {
-            // "The IP address of the target of the solicitation. It MUST NOT be a multicast
-            // address"
+            // "Target Address is not a multicast address"
             if ipv6::Addr(unsafe { *(m.as_slice().as_ptr().add(8) as *const _) }).is_multicast() {
                 return Err(m);
             }
 
             if m.as_slice().len() == 24 {
-                // no option
+                // no options
                 Ok(unsafe { Message::unchecked(m.buffer) })
             } else {
+                // "All included options have a length that is greater than zero"
                 if Options::are_valid(&m.as_slice()[24..]) {
                     Ok(unsafe { Message::unchecked(m.buffer) })
                 } else {
@@ -386,23 +394,37 @@ where
 {
     /* Constructors */
     /// Transforms the input buffer into a Neighbor Advertisement ICMPv6 message
-    pub fn neighbor_advertisement(mut buffer: B, src_opt_size: u8) -> Self {
-        let size = 24 + src_opt_size * 8;
+    ///
+    /// `target_ll_opt_size` is the size of the 'Target Link-layer Address' option *in units of 8
+    /// octets*. A value of `0` means that the option will be omitted.
+    ///
+    /// All these fields need to be filled by the caller
+    ///
+    /// - Override bit
+    /// - Solicited bit
+    /// - Router bit
+    /// - Target Address field
+    /// - Target Link-layer Address option
+    pub fn neighbor_advertisement(mut buffer: B, target_ll_opt_size: u8) -> Self {
+        let size = 24 + target_ll_opt_size * 8;
         assert!(buffer.as_slice().len() >= usize::from(size));
 
         // clear reserved field
-        buffer.as_mut_slice()[4..8].copy_from_slice(&[0; 4]);
+        unsafe { buffer.as_mut_slice().rm(4..8).copy_from_slice(&[0; 4]) };
 
         buffer.truncate(size);
 
         // set option type and length, and clear it (padding)
-        if src_opt_size != 0 {
-            buffer.as_mut_slice()[24] = OptionType::TargetLinkLayerAddress.into();
-            buffer.as_mut_slice()[25] = src_opt_size;
-
-            for byte in buffer.as_mut_slice()[26..].iter_mut() {
-                *byte = 0;
+        if target_ll_opt_size != 0 {
+            unsafe {
+                *buffer.as_mut_slice().gum(24) = OptionType::TargetLinkLayerAddress.into();
+                *buffer.as_mut_slice().gum(25) = target_ll_opt_size;
             }
+
+            // TODO we remove this
+            // for byte in buffer.as_mut_slice()[26..].iter_mut() {
+            //     *byte = 0;
+            // }
         }
 
         let mut m = Message {
@@ -496,20 +518,25 @@ where
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn set_target_addr(&mut self, addr: ipv6::Addr) {
+    /// Sets the 'Target Address' field
+    pub fn set_target(&mut self, addr: ipv6::Addr) {
         unsafe {
             self.as_mut_slice().rm(TARGET).copy_from_slice(&addr.0);
         }
     }
 
-    pub(crate) fn set_target_ll_addr(&mut self, addr: ieee802154::ExtendedAddr) {
-        let opt = self.target_ll_mut().unwrap();
+    // NOTE(unsafe) caller must ensure that the 'Target Link-layer Address' exists
+    pub(crate) unsafe fn set_target_ieee802154_addr(&mut self, addr: ieee802154::ExtendedAddr) {
+        let opt = self.target_ll_mut().unwrap_or_else(|| debug_unreachable!());
 
         NE::write_u64(&mut opt[..8], addr.0);
+    }
 
-        // padding
-        opt[8..].iter_mut().for_each(|byte| *byte = 0);
+    // NOTE(unsafe) caller must ensure that the 'Target Link-layer Address' exists
+    pub(crate) unsafe fn set_target_mac_addr(&mut self, addr: mac::Addr) {
+        self.target_ll_mut()
+            .unwrap_or_else(|| debug_unreachable!())
+            .copy_from_slice(&addr.0);
     }
 
     /// Mutable view into the 'Target Link-layer address' option
@@ -737,13 +764,15 @@ impl<'a> Iterator for OptionsMut<'a> {
         if self.opts.is_empty() {
             None
         } else {
-            let ty = OptionType::from(self.opts[0]);
-            let len = 8 * usize::from(self.opts[1]);
-            let contents = unsafe { &mut (*(self.opts as *mut [u8]))[2..len] };
+            unsafe {
+                let ty = OptionType::from(*self.opts.gu(0));
+                let len = 8 * usize::from(*self.opts.gu(1));
+                let contents = &mut *(self.opts.rm(2..len) as *mut [u8]);
 
-            self.opts = unsafe { &mut (*(self.opts as *mut [u8]))[len..] };
+                self.opts = &mut *(self.opts.rfm(len..) as *mut [u8]);
 
-            Some(OptionMut { ty, contents })
+                Some(OptionMut { ty, contents })
+            }
         }
     }
 }

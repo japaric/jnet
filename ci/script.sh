@@ -34,6 +34,7 @@ main() {
             local examples=(
                 hello
                 ipv4
+                ipv6
             )
 
             cargo build --target $TARGET --examples --release

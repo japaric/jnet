@@ -83,8 +83,8 @@ unsafe fn SVCall() {
         force_eval!(u.get_code());
         force_eval!(u.get_checksum());
         force_eval!(u.verify_checksum(
-            ipv6::Addr::LINK_LOCAL_ALL_NODES,
-            ipv6::Addr::LINK_LOCAL_ALL_NODES
+            ipv6::Addr::ALL_NODES,
+            ipv6::Addr::ALL_NODES
         ));
     }
 }

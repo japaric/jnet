@@ -10,7 +10,7 @@ use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 use owning_slice::{IntoSliceFrom, Truncate};
 
-use crate::{arp, ipv4, mac, traits::UncheckedIndex, Invalid};
+use crate::{arp, ipv4, ipv6, mac, traits::UncheckedIndex, Invalid};
 
 /* Frame format */
 const DESTINATION: Range<usize> = 0..6;
@@ -205,6 +205,20 @@ where
         };
         self.buffer.truncate(u16(HEADER_SIZE) + len);
     }
+
+    /// Fills the payload with an IPv6 packet
+    pub fn ipv6<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut ipv6::Packet<&mut [u8]>),
+    {
+        self.set_type(Type::Ipv4);
+        let len = {
+            let mut ip = ipv6::Packet::new(self.payload_mut());
+            f(&mut ip);
+            ip.get_length() + u16(ipv6::HEADER_SIZE)
+        };
+        self.buffer.truncate(u16(HEADER_SIZE) + len);
+    }
 }
 
 /// NOTE excludes the payload
@@ -229,10 +243,12 @@ full_range!(
     pub enum Type {
         /// IPv4
         Ipv4 = 0x0800,
+
         /// ARP
         Arp = 0x0806,
+
         /// IPv6
-        Ipv6 = 0x08DD,
+        Ipv6 = 0x86DD,
     }
 );
 

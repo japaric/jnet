@@ -379,7 +379,6 @@ where
             _ => {}
         }
 
-        // TODO uncomment
         // s.field("payload", &self.payload());
         s.finish()
     }
@@ -568,9 +567,11 @@ where
             if target_ll_addr.is_some() { 2 } else { 0 },
         );
         f(&mut message);
-        message.set_target_addr(target_addr);
+        message.set_target(target_addr);
         if let Some(target_ll_addr) = target_ll_addr {
-            message.set_target_ll_addr(target_ll_addr);
+            unsafe {
+                message.set_target_ieee802154_addr(target_ll_addr);
+            }
         }
         message.update_checksum(src, dest);
 
@@ -817,6 +818,7 @@ impl From<ShortAddr> for Addr {
 }
 
 /// Extended (64-bit) address
+// TODO convert this into [u8; 8]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExtendedAddr(pub u64);
 
@@ -834,8 +836,10 @@ impl ExtendedAddr {
         let mut bytes = [0; 8];
 
         NE::write_u64(&mut bytes, self.0);
+
         // toggle the universal / local bit
         bytes[0] ^= 1 << 1;
+
         bytes
     }
 }
