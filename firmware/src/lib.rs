@@ -24,7 +24,7 @@ use stm32f103xx_hal::{
 };
 
 /* Configuration */
-pub const MAC: mac::Addr = mac::Addr([0x20, 0x19, 0x01, 0x30, 0x23, 0x59]);
+pub const MAC: mac::Addr = mac::Addr([0x20, 0x19, 0x02, 0x01, 0x23, 0x59]);
 pub const IP: ipv4::Addr = ipv4::Addr([192, 168, 1, 33]);
 #[allow(non_camel_case_types)]
 pub type ARP_CACHE_SIZE = consts::U8;
