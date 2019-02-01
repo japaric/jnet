@@ -228,6 +228,11 @@ where
         unsafe { &self.as_slice().rf(start..) }
     }
 
+    /// Returns the byte representation of this packet
+    pub fn as_bytes(&self) -> &[u8] {
+        self.as_slice()
+    }
+
     /* Private */
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
@@ -311,7 +316,7 @@ where
     /// - IHL = 5
     /// - DSCP = 0
     /// - ECN = 0
-    /// - Total Length = `cmp::min(buffer.len(), u16::MAX)`
+    /// - Total Length = `buffer.len()`
     /// - Identification = 0
     /// - DF = true
     /// - MF = false
@@ -327,17 +332,21 @@ where
     ///
     /// # Panics
     ///
-    /// This constructor panics if the given `buffer` is smaller than `MIN_HEADER_SIZE`
+    /// This constructor panics if
+    ///
+    /// - the given `buffer` is smaller than `MIN_HEADER_SIZE`
+    /// - the packet would result in a packet length larger than `u16::MAX`.
     pub fn new(buffer: B) -> Self {
-        let len = buffer.as_slice().len();
-        assert!(len >= usize(MIN_HEADER_SIZE));
+        let blen = buffer.as_slice().len();
+        assert!(blen >= usize(MIN_HEADER_SIZE) || blen >= usize(u16::MAX));
 
         let mut packet: Self = Packet {
             buffer,
             _checksum: PhantomData,
         };
 
-        let total_len = u16(len).unwrap_or(u16::MAX);
+        // NOTE(cast) see `assert` above
+        let total_len = blen as u16;
         packet.set_version(4);
         unsafe { packet.set_ihl(5) }
 
@@ -354,7 +363,7 @@ where
         packet.set_mf(false);
         packet.set_fragment_offset(0);
 
-        packet.set_ttl(64); // cf. RFC 1700
+        packet.set_ttl(64); // see RFC 1700
 
         // protocol: unpopulated
 
@@ -365,7 +374,7 @@ where
         packet
     }
 
-    /// Fills the payload with an Echo Request ICMP packet
+    /// Fills the payload with an Echo Request ICMP message
     pub fn echo_request<F>(&mut self, f: F)
     where
         F: FnOnce(&mut icmp::Message<&mut [u8], icmp::EchoRequest, Invalid>),

@@ -10,7 +10,7 @@ use byteorder::{ByteOrder, NetworkEndian as NE};
 use cast::{u16, usize};
 use owning_slice::{IntoSliceFrom, Truncate};
 
-use crate::{arp, ipv4, mac, traits::UncheckedIndex, Invalid};
+use crate::{arp, ipv4, ipv6, mac, traits::UncheckedIndex, Invalid};
 
 /* Frame format */
 const DESTINATION: Range<usize> = 0..6;
@@ -202,6 +202,20 @@ where
             let mut ip = ipv4::Packet::new(self.payload_mut());
             f(&mut ip);
             ip.update_checksum().get_total_length()
+        };
+        self.buffer.truncate(u16(HEADER_SIZE) + len);
+    }
+
+    /// Fills the payload with an IPv6 packet
+    pub fn ipv6<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut ipv6::Packet<&mut [u8]>),
+    {
+        self.set_type(Type::Ipv4);
+        let len = {
+            let mut ip = ipv6::Packet::new(self.payload_mut());
+            f(&mut ip);
+            ip.get_length() + u16(ipv6::HEADER_SIZE)
         };
         self.buffer.truncate(u16(HEADER_SIZE) + len);
     }
