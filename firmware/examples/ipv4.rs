@@ -148,6 +148,12 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
         {
             if usize(packet.len()) > buf.len() {
                 error!("packet too big for our buffer");
+
+                packet
+                    .ignore()
+                    .map_err(|_| error!("Packet::ignore failed"))
+                    .ok()?;
+
                 continue;
             } else {
                 packet
@@ -164,6 +170,7 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
         match on_new_packet(packet, &mut cache) {
             Action::ArpReply(eth) => {
                 info!("sending ARP reply");
+
                 ethernet
                     .transmit(eth.as_bytes())
                     .map_err(|_| error!("Enc28j60::transmit failed"))
@@ -172,7 +179,9 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
             Action::EchoReply(eth) => {
                 info!("sending 'Echo Reply' ICMP message");
+
                 led.toggle();
+
                 ethernet
                     .transmit(eth.as_bytes())
                     .map_err(|_| error!("Enc28j60::transmit failed"))
@@ -181,7 +190,9 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
             Action::UdpReply(eth) => {
                 info!("sending UDP packet");
+
                 led.toggle();
+
                 ethernet
                     .transmit(eth.as_bytes())
                     .map_err(|_| error!("Enc28j60::transmit failed"))
@@ -220,6 +231,7 @@ fn on_new_packet<'a>(
 
                     if !arp.is_a_probe() {
                         info!("update ARP cache");
+
                         if cache.insert(arp.get_spa(), arp.get_sha()).is_err() {
                             warning!("ARP cache is full");
                         }
@@ -259,9 +271,11 @@ fn on_new_packet<'a>(
 
             let mut ip = if let Ok(ip) = ipv4::Packet::parse(eth.payload_mut()) {
                 info!("valid IPv4 packet");
+
                 ip
             } else {
                 error!("not a valid IPv4 packet");
+
                 return Action::Nop;
             };
 
@@ -277,39 +291,43 @@ fn on_new_packet<'a>(
                 ipv4::Protocol::Icmp => {
                     info!("IPv4 protocol: ICMP");
 
-                    if let Ok(icmp) = icmp::Message::parse(ip.payload_mut()) {
+                    let icmp = if let Ok(icmp) = icmp::Message::parse(ip.payload_mut()) {
                         info!("valid ICMP message");
 
-                        if let Ok(request) = icmp.downcast::<icmp::EchoRequest>() {
-                            info!("ICMP message has type 'Echo Request'");
-
-                            let src_mac = if let Some(mac) = cache.get(&src_ip) {
-                                mac
-                            } else {
-                                error!("IP address not in the ARP cache");
-                                return Action::Nop;
-                            };
-
-                            // construct a reply in-place
-                            // (the reply will have the same size as the request)
-                            let _reply: icmp::Message<_, icmp::EchoReply, _> = request.into();
-
-                            // update the IP header
-                            let mut ip = ip.set_source(IP);
-                            ip.set_destination(src_ip);
-                            let _ip = ip.update_checksum();
-
-                            // update the Ethernet header
-                            eth.set_destination(*src_mac);
-                            eth.set_source(MAC);
-
-                            return Action::EchoReply(eth);
-                        } else {
-                            error!("not a 'Echo Request' ICMP message");
-                        }
+                        icmp
                     } else {
                         error!("not a valid ICMP message");
+
                         return Action::Nop;
+                    };
+
+                    if let Ok(request) = icmp.downcast::<icmp::EchoRequest>() {
+                        info!("ICMP message has type 'Echo Request'");
+
+                        let src_mac = if let Some(mac) = cache.get(&src_ip) {
+                            mac
+                        } else {
+                            error!("IP address not in the ARP cache");
+
+                            return Action::Nop;
+                        };
+
+                        // construct a reply in-place
+                        // (the reply will have the same size as the request)
+                        let _reply: icmp::Message<_, icmp::EchoReply, _> = request.into();
+
+                        // update the IP header
+                        let mut ip = ip.set_source(IP);
+                        ip.set_destination(src_ip);
+                        let _ip = ip.update_checksum();
+
+                        // update the Ethernet header
+                        eth.set_destination(*src_mac);
+                        eth.set_source(MAC);
+
+                        return Action::EchoReply(eth);
+                    } else {
+                        error!("not a 'Echo Request' ICMP message");
                     }
                 }
 
@@ -342,10 +360,12 @@ fn on_new_packet<'a>(
                             return Action::UdpReply(eth);
                         } else {
                             error!("IP address not in the ARP cache");
+
                             return Action::Nop;
                         }
                     } else {
                         error!("not a valid UDP packet");
+
                         return Action::Nop;
                     }
                 }
