@@ -120,6 +120,15 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
                     .ok()?;
             }
 
+            Action::EchoReply(eth) => {
+                info!("sending Echo Reply");
+
+                ethernet
+                    .transmit(eth.as_bytes())
+                    .map_err(|_| error!("Enc28j60::transmit failed"))
+                    .ok()?;
+            }
+
             Action::Nop => {}
         }
     }
@@ -298,7 +307,46 @@ fn on_new_packet<'a>(
                         }
 
                         icmpv6::Type::EchoRequest => {
-                            info!("ICMPv6 type: EchoRequest; ignoring (for now)");
+                            info!("ICMPv6 type: EchoRequest");
+
+                            let src_mac = if let Some(mac) = cache.get(&src_nl_addr) {
+                                mac
+                            } else {
+                                error!("IP address not in the neighbor cache");
+
+                                return Action::Nop;
+                            };
+
+                            let request =
+                                if let Ok(request) = icmp.downcast::<icmpv6::EchoRequest>() {
+                                    request
+                                } else {
+                                    error!("not a valid NeighborSolicitation message");
+
+                                    return Action::Nop;
+                                };
+
+                            // "ICMP Checksum is valid"
+                            if !request.verify_checksum(src_nl_addr, dest_nl_addr) {
+                                error!("EchoRequest: invalid checksum");
+
+                                return Action::Nop;
+                            }
+
+                            // construct a reply in-place
+                            // (the reply will have the same size as the request)
+                            let mut reply: icmpv6::Message<_, icmpv6::EchoReply> = request.into();
+                            reply.update_checksum(our_nl_addr, src_nl_addr);
+
+                            // update the IP header
+                            ip.set_source(our_nl_addr);
+                            ip.set_destination(src_nl_addr);
+
+                            // update the Ethernet header
+                            eth.set_destination(*src_mac);
+                            eth.set_source(MAC);
+
+                            return Action::EchoReply(eth);
                         }
 
                         _ => {
@@ -327,5 +375,6 @@ fn on_new_packet<'a>(
 
 enum Action<'a> {
     SolicitedNeighborAdvertisement(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
+    EchoReply(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
     Nop,
 }

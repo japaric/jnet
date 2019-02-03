@@ -67,6 +67,7 @@ mod override_ {
 const TARGET: Range<usize> = 8..24;
 
 /// ICMPv6 Message
+// TODO add 'Checksum = {Valid,Unknown}' type state
 pub struct Message<BUFFER, TYPE>
 where
     BUFFER: AsSlice<Element = u8>,
@@ -314,6 +315,18 @@ where
             .field("target", &Quoted(self.get_target()))
             .field("source_ll", &self.get_source_ll())
             .finish()
+    }
+}
+
+impl<B> From<Message<B, EchoRequest>> for Message<B, EchoReply>
+where
+    B: AsSlice<Element = u8> + AsMutSlice<Element = u8>,
+{
+    fn from(p: Message<B, EchoRequest>) -> Self {
+        let mut p: Message<B, Unknown> = unsafe { Message::unchecked(p.buffer) };
+        p.set_type(Type::EchoReply);
+        let p: Message<B, EchoReply> = unsafe { Message::unchecked(p.buffer) };
+        p
     }
 }
 
