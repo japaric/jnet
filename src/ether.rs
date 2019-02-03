@@ -211,7 +211,7 @@ where
     where
         F: FnOnce(&mut ipv6::Packet<&mut [u8]>),
     {
-        self.set_type(Type::Ipv4);
+        self.set_type(Type::Ipv6);
         let len = {
             let mut ip = ipv6::Packet::new(self.payload_mut());
             f(&mut ip);
