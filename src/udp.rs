@@ -10,6 +10,7 @@ use owning_slice::Truncate;
 
 use crate::{
     coap::{self, Unset},
+    ipv6,
     traits::UncheckedIndex,
 };
 
@@ -89,6 +90,51 @@ where
         self.as_slice()
     }
 
+    /* Miscellaneous */
+    pub(crate) fn compute_checksum(&self, src: ipv6::Addr, dest: ipv6::Addr) -> u16 {
+        const NEXT_HEADER: u8 = 17;
+
+        let mut sum: u32 = 0;
+
+        // Pseudo-header
+        for chunk in src.0.chunks_exact(2).chain(dest.0.chunks_exact(2)) {
+            sum += u32::from(NE::read_u16(chunk));
+        }
+
+        // XXX should this be just `as u16`?
+        let len = self.as_slice().len() as u32;
+        sum += len >> 16;
+        sum += len & 0xffff;
+
+        sum += u32::from(NEXT_HEADER);
+
+        // UDP message
+        for (i, chunk) in self.as_slice().chunks(2).enumerate() {
+            if i == 3 {
+                // this is the checksum field, skip
+                continue;
+            }
+
+            if chunk.len() == 1 {
+                sum += u32::from(chunk[0]) << 8;
+            } else {
+                sum += u32::from(NE::read_u16(chunk));
+            }
+        }
+
+        // fold carry-over
+        while sum >> 16 != 0 {
+            sum = (sum & 0xffff) + (sum >> 16);
+        }
+
+        !(sum as u16)
+    }
+
+    /// Verifies the 'Checksum' field
+    pub fn verify_ipv6_checksum(&self, src: ipv6::Addr, dest: ipv6::Addr) -> bool {
+        self.compute_checksum(src, dest) == self.get_checksum()
+    }
+
     /* Private */
     fn as_slice(&self) -> &[u8] {
         self.buffer.as_slice()
@@ -138,6 +184,12 @@ where
     /// Mutable view into the payload
     pub fn payload_mut(&mut self) -> &mut [u8] {
         &mut self.as_mut_slice()[PAYLOAD]
+    }
+
+    /// Recomputes and updates the 'Checksum' field
+    pub fn update_ipv6_checksum(&mut self, src: ipv6::Addr, dest: ipv6::Addr) {
+        let cksum = self.compute_checksum(src, dest);
+        self.set_checksum(cksum)
     }
 
     /* Private */
