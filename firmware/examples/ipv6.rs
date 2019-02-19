@@ -1,4 +1,6 @@
-//! `ping -c1 fe80::2219:2ff:fe01:2359`
+//! Simplified IPv6 stack
+//!
+//! This stack responds to "ping"s and echoes back UDP packets.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -22,7 +24,7 @@ use cast::usize;
 use cortex_m_rt::entry;
 use enc28j60::Packet;
 use heapless::FnvIndexMap;
-use jnet::{ether, icmpv6, ipv6, mac};
+use jnet::{ether, icmpv6, ipv6, mac, udp};
 use owning_slice::OwningSliceTo;
 use stlog::{
     global_logger,
@@ -111,6 +113,19 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
         info!("new packet");
 
         match on_new_packet(packet, &mut cache) {
+            Action::EchoReply(eth) => {
+                info!("sending Echo Reply");
+
+                led.toggle();
+
+                ethernet
+                    .transmit(eth.as_bytes())
+                    .map_err(|_| error!("Enc28j60::transmit failed"))
+                    .ok()?;
+            }
+
+            Action::Nop => {}
+
             Action::SolicitedNeighborAdvertisement(eth) => {
                 info!("sending solicited Neighbor Advertisement");
 
@@ -120,16 +135,16 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
                     .ok()?;
             }
 
-            Action::EchoReply(eth) => {
-                info!("sending Echo Reply");
+            Action::UdpReply(eth) => {
+                info!("sending UDP packet");
+
+                led.toggle();
 
                 ethernet
                     .transmit(eth.as_bytes())
                     .map_err(|_| error!("Enc28j60::transmit failed"))
                     .ok()?;
             }
-
-            Action::Nop => {}
         }
     }
 }
@@ -355,6 +370,52 @@ fn on_new_packet<'a>(
                     }
                 }
 
+                ipv6::NextHeader::Udp => {
+                    info!("IPv6 next-header: UDP");
+
+                    let mut udp = if let Ok(udp) = udp::Packet::parse(ip.payload_mut()) {
+                        info!("valid UDP packet");
+
+                        if !udp.verify_ipv6_checksum(src_nl_addr, dest_nl_addr) {
+                            error!("UDP: invalid checksum");
+
+                            return Action::Nop;
+                        }
+
+                        udp
+                    } else {
+                        error!("not a valid UDP packet");
+
+                        return Action::Nop;
+                    };
+
+                    if let Some(src_mac) = cache.get(&src_nl_addr) {
+                        // echo back the packet
+                        let src_port = udp.get_source();
+                        let dst_port = udp.get_destination();
+
+                        // we build the response in-place
+                        // update the UDP header
+                        udp.set_source(dst_port);
+                        udp.set_destination(src_port);
+                        udp.update_ipv6_checksum(our_nl_addr, src_nl_addr);
+
+                        // update the IP header
+                        ip.set_source(our_nl_addr);
+                        ip.set_destination(src_nl_addr);
+
+                        // update the Ethernet header
+                        eth.set_destination(*src_mac);
+                        eth.set_source(MAC);
+
+                        return Action::UdpReply(eth);
+                    } else {
+                        error!("IP address not in the neighbor cache");
+
+                        return Action::Nop;
+                    }
+                }
+
                 _ => {
                     info!("unexpected IPv6 protocol; ignoring");
                 }
@@ -374,7 +435,8 @@ fn on_new_packet<'a>(
 }
 
 enum Action<'a> {
-    SolicitedNeighborAdvertisement(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
     EchoReply(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
     Nop,
+    SolicitedNeighborAdvertisement(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
+    UdpReply(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
 }
