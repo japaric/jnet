@@ -192,7 +192,7 @@ impl<B, T> Message<B, T>
 where
     B: AsMutSlice<Element = u8>,
 {
-    /// Updates the 'Checksum' field
+    /// Recomputes and updates the 'Checksum' field
     pub fn update_checksum(&mut self, src: ipv6::Addr, dest: ipv6::Addr) {
         let checksum = self.compute_checksum(src, dest);
         self.set_checksum(checksum);
