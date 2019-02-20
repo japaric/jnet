@@ -459,6 +459,12 @@ where
         self.header_mut_()[SEQUENCE] = seq;
     }
 
+    /// Returns a mutable view into the payload
+    pub fn payload_mut(&mut self) -> &mut [u8] {
+        let start = usize::from(self.payload);
+        &mut self.as_mut_slice()[start..]
+    }
+
     fn set_frame_type(&mut self, ftype: Type) {
         set!(self.header_mut_()[CONTROLL], frame_type, u8::from(ftype))
     }
@@ -484,11 +490,6 @@ where
         debug_assert!(self.as_slice().len() >= HEADER_SIZE as usize);
 
         unsafe { &mut *(self.as_mut_slice().as_mut_ptr() as *mut _) }
-    }
-
-    fn payload_mut(&mut self) -> &mut [u8] {
-        let start = usize::from(self.payload);
-        &mut self.as_mut_slice()[start..]
     }
 }
 
@@ -540,7 +541,6 @@ where
         &mut self,
         src: ipv6::Addr,
         dest: ipv6::Addr,
-        target_addr: ipv6::Addr,
         target_ll_addr: Option<ExtendedAddr>,
         f: F,
     ) where
@@ -567,7 +567,6 @@ where
             if target_ll_addr.is_some() { 2 } else { 0 },
         );
         f(&mut message);
-        message.set_target(target_addr);
         if let Some(target_ll_addr) = target_ll_addr {
             unsafe {
                 message.set_target_ieee802154_addr(target_ll_addr);
@@ -841,6 +840,19 @@ impl ExtendedAddr {
         bytes[0] ^= 1 << 1;
 
         bytes
+    }
+
+    /// Converts this extended address into a link-local IPv6 address using the EUI-64 format (see
+    /// RFC2464)
+    pub fn into_link_local_address(self) -> ipv6::Addr {
+        let mut bytes = [0; 16];
+
+        bytes[0] = 0xfe;
+        bytes[1] = 0x80;
+
+        bytes[8..].copy_from_slice(&self.eui_64());
+
+        ipv6::Addr(bytes)
     }
 }
 
