@@ -14,6 +14,12 @@ All these examples feature:
 - Very few panicking branches after optimization. These are actually unreachable
   but the optimizer is not able to remove them.
 
+List of examples:
+
+- [`ipv4`](#ipv4), a simplified IPv4 over Ethernet stack.
+- [`ipv6`](#ipv6), a simplified IPv6 over Ethernet stack.
+- [`sixlowpan`](#sixlowpan), an IPv6 over 802.15.4 stack.
+
 ## `ipv4`
 
 A simplified IPv4 stack. This stack responds to "ping"s and echoes back UDP
@@ -149,7 +155,7 @@ $ sudo ip -s -s neigh flush all
 
 $ ip -6 neigh show
 
-$ ping -6 -c1 fe80::2219:2ff:fe01:2359%wlan0
+$ ping -6 -c2 fe80::2219:2ff:fe01:2359%wlan0
 PING fe80::2219:2ff:fe01:2359%wlan0(fe80::2219:2ff:fe01:2359%wlan0) 56 data bytes
 64 bytes from fe80::2219:2ff:fe01:2359%wlan0: icmp_seq=1 ttl=64 time=32.10 ms
 64 bytes from fe80::2219:2ff:fe01:2359%wlan0: icmp_seq=2 ttl=64 time=26.10 ms
@@ -240,4 +246,117 @@ Feb 20 00:32:07.495 INFO Updating the Neighbor cache, loc: examples/ipv6.rs:202
 Feb 20 00:32:07.495 INFO IPv6 next-header: UDP, loc: examples/ipv6.rs:374
 Feb 20 00:32:07.495 INFO valid UDP packet, loc: examples/ipv6.rs:377
 Feb 20 00:32:07.495 INFO sending UDP packet, loc: examples/ipv6.rs:139
+```
+
+## `sixlowpan`
+
+### Setup
+
+First set up a 6lowpan device on the Linux host. You'll need an 802.15.4
+transceiver like the ATUSB.
+
+``` console
+$ # install wpan-tools
+$ yay -S wpan-tools
+
+$ # connect the device and confirm its presence
+$ ip link | tail -n2
+53: wpan0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 123 qdisc fq_codel state UNKNOWN mode DEFAULT group default qlen 300
+    link/ieee802.15.4 xx:xx:xx:xx:xx:xx:xx:xx brd ff:ff:ff:ff:ff:ff:ff:ff
+
+$ # turn off the interface so we can configure it
+$ sudo ifconfig wpan0 up
+
+$ # check the supported channels
+$ iwpan phy phy0 info | head -n5
+wpan_phy phy0
+supported channels:
+        page 0: 11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26
+current_page: 0
+current_channel: 11,  2405 MHz
+
+$ # change the channel to match the device's
+$ sudo iwpan phy phy0 set channel 0 22
+
+$ # change the PAN ID to match the device's
+$ sudo iwpan dev wpan0 set pan_id 0xbeef
+
+$ # create a 6LoWPAN interface
+$ sudo ip link add link wpan0 name lowpan0 type lowpan
+
+$ # the new interface should now appear under `ip link`
+$ ip link | tail -n4
+53: wpan0: <BROADCAST,NOARP> mtu 123 qdisc fq_codel state DOWN mode DEFAULT group default qlen 300
+    link/ieee802.15.4 10:e2:d5:ff:ff:00:02:28 brd ff:ff:ff:ff:ff:ff:ff:ff
+54: lowpan0@wpan0: <BROADCAST,MULTICAST,M-DOWN> mtu 1280 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/6lowpan 10:e2:d5:ff:ff:00:02:28 brd ff:ff:ff:ff:ff:ff:ff:ff
+
+$ # bring the interfaces up
+$ sudo ifconfig wpan0 up
+$ sudo ifconfig lowpan0 up
+```
+
+If you run into trouble check: http://wpan.cakelab.org/
+
+### `ping` test
+
+On a Linux host issue these commands:
+
+``` console
+$ # flush the neighbor cache
+$ sudo  ip -s -s neigh flush all
+
+$ ip -6 neigh show
+
+$ ping -6 -c2 fe80::2219:220:23:5959%lowpan0
+PING fe80::2219:220:23:5959%lowpan0(fe80::2219:220:23:5959%lowpan0) 56 data bytes
+64 bytes from fe80::2219:220:23:5959%lowpan0: icmp_seq=1 ttl=64 time=35.6 ms
+64 bytes from fe80::2219:220:23:5959%lowpan0: icmp_seq=2 ttl=64 time=14.8 ms
+
+--- fe80::2219:220:23:5959%lowpan0 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 3ms
+rtt min/avg/max/mdev = 14.775/25.204/35.633/10.429 ms
+```
+
+You should see the LED on the board blink twice. The neighbor cache should now
+include the device:
+
+``` console
+$ ip -6 neigh show
+fe80::2219:220:23:5959 dev lowpan0 lladdr 20:19:02:20:00:23:59:59 REACHABLE
+```
+
+In the logs you should see something like this:
+
+``` text
+Feb 21 00:52:56.916 INFO Initializing .., loc: examples/sixlowpan.rs:52
+Feb 21 00:52:56.920 INFO Done with initialization, loc: examples/sixlowpan.rs:68
+
+Feb 21 00:53:01.903 INFO new packet, loc: examples/sixlowpan.rs:93
+Feb 21 00:53:01.903 INFO valid MAC frame, loc: examples/sixlowpan.rs:130
+Feb 21 00:53:01.903 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:173
+Feb 21 00:53:01.903 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:194
+Feb 21 00:53:01.903 INFO IPv6 next-header: ICMPv6, loc: examples/sixlowpan.rs:204
+Feb 21 00:53:01.903 INFO valid ICMPv6 message, loc: examples/sixlowpan.rs:208
+Feb 21 00:53:01.903 INFO ICMPv6 type: NeighborSolicitation, loc: examples/sixlowpan.rs:220
+Feb 21 00:53:01.903 INFO NeighborSolicitation target address matches our address, loc: examples/sixlowpan.rs:272
+Feb 21 00:53:01.903 INFO sending solicited Neighbor Advertisement, loc: examples/sixlowpan.rs:111
+
+Feb 21 00:53:01.919 INFO new packet, loc: examples/sixlowpan.rs:93
+Feb 21 00:53:01.919 INFO valid MAC frame, loc: examples/sixlowpan.rs:130
+Feb 21 00:53:01.919 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:173
+Feb 21 00:53:01.919 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:194
+Feb 21 00:53:01.919 INFO IPv6 next-header: ICMPv6, loc: examples/sixlowpan.rs:204
+Feb 21 00:53:01.919 INFO valid ICMPv6 message, loc: examples/sixlowpan.rs:208
+Feb 21 00:53:01.919 INFO ICMPv6 type: EchoRequest, loc: examples/sixlowpan.rs:318
+Feb 21 00:53:01.919 INFO sending Echo Reply, loc: examples/sixlowpan.rs:97
+
+Feb 21 00:53:02.900 INFO new packet, loc: examples/sixlowpan.rs:93
+Feb 21 00:53:02.900 INFO valid MAC frame, loc: examples/sixlowpan.rs:130
+Feb 21 00:53:02.900 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:173
+Feb 21 00:53:02.900 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:194
+Feb 21 00:53:02.900 INFO IPv6 next-header: ICMPv6, loc: examples/sixlowpan.rs:204
+Feb 21 00:53:02.900 INFO valid ICMPv6 message, loc: examples/sixlowpan.rs:208
+Feb 21 00:53:02.900 INFO ICMPv6 type: EchoRequest, loc: examples/sixlowpan.rs:318
+Feb 21 00:53:02.900 INFO sending Echo Reply, loc: examples/sixlowpan.rs:97
 ```

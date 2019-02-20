@@ -15,7 +15,7 @@
 extern crate panic_abort;
 // extern crate panic_semihosting; // alternative panic handler
 
-use blue_pill::{Ethernet, Led, ARP_CACHE_SIZE, IP, MAC};
+use blue_pill::{Ethernet, Led, CACHE_SIZE, IP, MAC};
 use cast::usize;
 use cortex_m_rt::entry;
 use heapless::FnvIndexMap;
@@ -46,7 +46,9 @@ fn main() -> ! {
         blue_pill::fatal();
     });
 
-    let (ethernet, led) = blue_pill::init(core, device);
+    let (ethernet, led) = blue_pill::init_enc28j60(core, device);
+
+    info!("Done with initialization");
 
     run(ethernet, led).unwrap_or_else(|| {
         error!("`run` failed");
@@ -126,7 +128,7 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 // IO-less / "pure" logic
 fn on_new_packet<'a>(
     bytes: &'a mut [u8],
-    cache: &mut FnvIndexMap<ipv4::Addr, mac::Addr, ARP_CACHE_SIZE>,
+    cache: &mut FnvIndexMap<ipv4::Addr, mac::Addr, CACHE_SIZE>,
 ) -> Action<'a> {
     let mut eth = if let Ok(f) = ether::Frame::parse(bytes) {
         info!("valid Ethernet frame");
