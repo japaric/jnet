@@ -542,14 +542,14 @@ where
     pub(crate) unsafe fn set_target_ieee802154_addr(&mut self, addr: ieee802154::ExtendedAddr) {
         let opt = self.target_ll_mut().unwrap_or_else(|| debug_unreachable!());
 
-        NE::write_u64(&mut opt[..8], addr.0);
+        NE::write_u64(&mut opt[..core::mem::size_of_val(&addr.0)], addr.0);
     }
 
     // NOTE(unsafe) caller must ensure that the 'Target Link-layer Address' exists
     pub(crate) unsafe fn set_target_mac_addr(&mut self, addr: mac::Addr) {
-        self.target_ll_mut()
-            .unwrap_or_else(|| debug_unreachable!())
-            .copy_from_slice(&addr.0);
+        let opt = self.target_ll_mut().unwrap_or_else(|| debug_unreachable!());
+
+        opt[..addr.0.len()].copy_from_slice(&addr.0)
     }
 
     /// Mutable view into the 'Target Link-layer address' option
