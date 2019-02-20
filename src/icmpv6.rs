@@ -542,7 +542,7 @@ where
     pub(crate) unsafe fn set_target_ieee802154_addr(&mut self, addr: ieee802154::ExtendedAddr) {
         let opt = self.target_ll_mut().unwrap_or_else(|| debug_unreachable!());
 
-        NE::write_u64(&mut opt[..core::mem::size_of_val(&addr.0)], addr.0);
+        NE::write_u64(opt.rtm(..8), addr.0);
     }
 
     // NOTE(unsafe) caller must ensure that the 'Target Link-layer Address' exists
