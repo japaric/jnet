@@ -104,8 +104,7 @@ fn run(mut radio: Radio, mut led: Led) -> Option<!> {
                     .ok()?;
             }
 
-            Action::Nop => {
-            }
+            Action::Nop => {}
 
             Action::SolicitedNeighborAdvertisement(mac) => {
                 info!("sending solicited Neighbor Advertisement");
@@ -115,7 +114,6 @@ fn run(mut radio: Radio, mut led: Led) -> Option<!> {
                     .map_err(|_| error!("Mrf24j40::transmit failed"))
                     .ok()?;
             }
-
         }
     }
 }
@@ -317,14 +315,13 @@ fn on_new_frame<'a>(
                     icmpv6::Type::EchoRequest => {
                         info!("ICMPv6 type: EchoRequest");
 
-                        let request =
-                            if let Ok(request) = icmp.downcast::<icmpv6::EchoRequest>() {
-                                request
-                            } else {
-                                error!("not a valid NeighborSolicitation message");
+                        let request = if let Ok(request) = icmp.downcast::<icmpv6::EchoRequest>() {
+                            request
+                        } else {
+                            error!("not a valid NeighborSolicitation message");
 
-                                return Action::Nop;
-                            };
+                            return Action::Nop;
+                        };
 
                         let dest_addr = if let Some(addr) = cache.get(&src_nl_addr) {
                             *addr
@@ -372,9 +369,7 @@ fn on_new_frame<'a>(
 }
 
 enum Action<'a> {
-    EchoReply(
-        ieee802154::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>,
-    ),
+    EchoReply(ieee802154::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
 
     Nop,
 
