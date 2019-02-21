@@ -19,7 +19,7 @@
 extern crate panic_abort;
 // extern crate panic_semihosting; // alternative panic handler
 
-use blue_pill::{Ethernet, Led, ARP_CACHE_SIZE, IP, MAC};
+use blue_pill::{Ethernet, Led, CACHE_SIZE, IP, MAC};
 use cast::usize;
 use cortex_m_rt::entry;
 use enc28j60::Packet;
@@ -31,8 +31,6 @@ use stlog::{
     spanned::{error, info, warning},
 };
 use stm32f103xx_hal::{prelude::*, stm32f103xx};
-
-const BUF_SZ: u8 = 255;
 
 #[global_logger]
 static LOGGER: blue_pill::ItmLogger = blue_pill::ItmLogger;
@@ -58,7 +56,7 @@ fn main() -> ! {
         blue_pill::fatal();
     });
 
-    let (mut ethernet, led) = blue_pill::init(core, device);
+    let (mut ethernet, led) = blue_pill::init_enc28j60(core, device);
 
     ethernet.accept(&[Packet::Multicast]).unwrap_or_else(|_| {
         error!("receive filter configuration failed");
@@ -73,12 +71,16 @@ fn main() -> ! {
         blue_pill::fatal();
     });
 
+    info!("Done with initialization");
+
     run(ethernet, led).unwrap_or_else(|| {
         error!("`run` failed");
 
         blue_pill::fatal()
     });
 }
+
+const BUF_SZ: u8 = 255;
 
 // main logic
 fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
@@ -151,15 +153,15 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
 // IO-less / "pure" logic
 fn on_new_packet<'a>(
-    bytes: OwningSliceTo<&'a mut [u8; 255], u8>,
-    cache: &mut FnvIndexMap<ipv6::Addr, mac::Addr, ARP_CACHE_SIZE>,
+    bytes: OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>,
+    cache: &mut FnvIndexMap<ipv6::Addr, mac::Addr, CACHE_SIZE>,
 ) -> Action<'a> {
     let mut eth = if let Ok(f) = ether::Frame::parse(bytes) {
         info!("valid Ethernet frame");
 
         f
     } else {
-        error!("not a valid Ethernet frame");
+        error!("invalid Ethernet frame");
 
         return Action::Nop;
     };
@@ -222,7 +224,7 @@ fn on_new_packet<'a>(
 
                         icmp
                     } else {
-                        error!("not a valid ICMP message");
+                        error!("invalid ICMPv6 message");
 
                         return Action::Nop;
                     };

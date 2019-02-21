@@ -510,6 +510,7 @@ where
     ) -> Self {
         let blen = buffer.as_slice().len();
         assert!(blen >= 2);
+        // TODO check if this panicking branch gets removed after changing the repr of ExtendedAddr
         assert!(!src.is_multicast());
 
         // DISPATCH + (TF = 0b11)
@@ -797,7 +798,14 @@ impl fmt::Display for ElidedAddr {
 
 impl ElidedAddr {
     /// Complete this elided address using Link-layer information
-    pub fn complete(self, ll_addr: ll::Addr) -> ipv6::Addr {
+    pub fn complete<A>(self, ll_addr: A) -> ipv6::Addr
+    where
+        A: Into<ll::Addr>,
+    {
+        self.complete_(ll_addr.into())
+    }
+
+    fn complete_(self, ll_addr: ll::Addr) -> ipv6::Addr {
         let mut bytes = [0; 16];
 
         // link-local prefix

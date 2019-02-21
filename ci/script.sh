@@ -35,6 +35,7 @@ main() {
                 hello
                 ipv4
                 ipv6
+                sixlowpan
             )
 
             cargo build --target $TARGET --examples --release
