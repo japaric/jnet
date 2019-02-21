@@ -31,7 +31,8 @@ packets.
 
 - The device does *not* announce or probe its IP address on boot
 
-- The device will *not* attempt to ARP request IP addresses it doesn't know about
+- The device will *not* attempt to ARP request IP addresses it doesn't know
+about
 
 ### `ping` test
 
@@ -99,7 +100,7 @@ Feb 20 00:20:51.688 INFO ICMP message has type 'Echo Request', loc: examples/ipv
 Feb 20 00:20:51.688 INFO sending 'Echo Reply' ICMP message, loc: examples/ipv4.rs:132
 ```
 
-### `nc`
+### `nc` test
 
 On a Linux host issue these commands
 
@@ -250,6 +251,9 @@ Feb 20 00:32:07.495 INFO sending UDP packet, loc: examples/ipv6.rs:139
 
 ## `sixlowpan`
 
+A simple 6LoWPAN stack. This stack responds to "ping"s and echoes back UDP
+packets.
+
 ### Setup
 
 First set up a 6lowpan device on the Linux host. You'll need an 802.15.4
@@ -265,7 +269,7 @@ $ ip link | tail -n2
     link/ieee802.15.4 xx:xx:xx:xx:xx:xx:xx:xx brd ff:ff:ff:ff:ff:ff:ff:ff
 
 $ # turn off the interface so we can configure it
-$ sudo ifconfig wpan0 up
+$ sudo ifconfig wpan0 down
 
 $ # check the supported channels
 $ iwpan phy phy0 info | head -n5
@@ -359,4 +363,39 @@ Feb 21 00:53:02.900 INFO IPv6 next-header: ICMPv6, loc: examples/sixlowpan.rs:20
 Feb 21 00:53:02.900 INFO valid ICMPv6 message, loc: examples/sixlowpan.rs:208
 Feb 21 00:53:02.900 INFO ICMPv6 type: EchoRequest, loc: examples/sixlowpan.rs:318
 Feb 21 00:53:02.900 INFO sending Echo Reply, loc: examples/sixlowpan.rs:97
+```
+
+### `nc` test
+
+On a Linux host issue these commands
+
+``` console
+nc -u fe80::2219:220:23:5959%lowpan0 1337
+hello
+hello
+world
+world
+```
+
+You should see the LED on the board blink each time you send a message. You
+should also see the message being echoed back.
+
+In the logs you should see something like this:
+
+``` text
+Feb 21 20:26:31.224 INFO new packet, loc: examples/sixlowpan.rs:93
+Feb 21 20:26:31.224 INFO valid MAC frame, loc: examples/sixlowpan.rs:140
+Feb 21 20:26:31.224 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:183
+Feb 21 20:26:31.224 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:204
+Feb 21 20:26:31.224 INFO payload is LOWPAN_NHC encoded, loc: examples/sixlowpan.rs:377
+Feb 21 20:26:31.224 INFO valid UDP packet, loc: examples/sixlowpan.rs:380
+Feb 21 20:26:31.224 INFO sending UDP packet, loc: examples/sixlowpan.rs:119
+
+Feb 21 20:26:32.160 INFO new packet, loc: examples/sixlowpan.rs:93
+Feb 21 20:26:32.160 INFO valid MAC frame, loc: examples/sixlowpan.rs:140
+Feb 21 20:26:32.160 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:183
+Feb 21 20:26:32.160 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:204
+Feb 21 20:26:32.160 INFO payload is LOWPAN_NHC encoded, loc: examples/sixlowpan.rs:377
+Feb 21 20:26:32.160 INFO valid UDP packet, loc: examples/sixlowpan.rs:380
+Feb 21 20:26:32.160 INFO sending UDP packet, loc: examples/sixlowpan.rs:119
 ```

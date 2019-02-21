@@ -618,23 +618,6 @@ where
         let len = (udp_packet.bytes().len() + ip_packet.header().len() + self.header().len()) as u8;
         self.buffer.truncate(len);
     }
-
-    // pub fn sixlowpan<F>(&mut self, hop_limit: u8, src: ipv6::Addr, dest: ipv6::Addr, f: F)
-    // where
-    //     F: FnOnce(&mut sixlowpan::Packet<&mut [u8]>),
-    // {
-    //     let ctxt = sixlowpan::Context {
-    //         source: self.get_src_addr(),
-    //         destination: self.get_dest_addr(),
-    //     };
-    //     let len = self.payload + {
-    //         let mut packet =
-    //             sixlowpan::Packet::new(self.payload_mut(), hop_limit, src, dest, &ctxt);
-    //         f(&mut packet);
-    //         packet.bytes().len() as u8
-    //     };
-    //     self.buffer.truncate(len);
-    // }
 }
 
 // NOTE `src_addr` can't never be the broadcast address

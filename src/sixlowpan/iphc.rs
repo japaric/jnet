@@ -499,7 +499,6 @@ impl<B> Packet<B>
 where
     B: AsMutSlice<Element = u8>,
 {
-    #[allow(dead_code)]
     pub(crate) fn new(
         mut buffer: B,
         next_header: Option<ipv6::NextHeader>,
@@ -509,21 +508,21 @@ where
         ctxt: &Context,
     ) -> Self {
         let blen = buffer.as_slice().len();
-        assert!(blen >= 2);
-        // TODO check if this panicking branch gets removed after changing the repr of ExtendedAddr
-        assert!(!src.is_multicast());
+
+        let mut idx = 2;
+        assert!(blen >= idx);
 
         // DISPATCH + (TF = 0b11)
         buffer.as_mut_slice()[0] = 0b011_11_0_00;
         buffer.as_mut_slice()[1] = 0b0_0_00_0_0_00;
 
         let mut packet = Packet { buffer, payload: 0 };
-        let mut idx = 2;
-        assert!(blen >= idx);
 
         if let Some(next_header) = next_header {
-            packet.as_mut_slice()[idx] = next_header.into();
             idx += 1;
+            assert!(blen >= idx);
+
+            packet.as_mut_slice()[idx - 1] = next_header.into();
         } else {
             packet.set_nh(1);
         }

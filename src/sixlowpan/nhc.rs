@@ -132,6 +132,15 @@ where
         get!(self.header_(), p)
     }
 
+    /// Verifies the 'Checksum' field
+    pub fn verify_ipv6_checksum(&self, src: ipv6::Addr, dest: ipv6::Addr) -> bool {
+        if let Some(cksum) = self.get_checksum() {
+            self.compute_checksum(src, dest) == cksum
+        } else {
+            true
+        }
+    }
+
     /* Private */
     fn ports_size(&self) -> u8 {
         match self.get_p() {
@@ -153,7 +162,7 @@ where
         let mut sum: u32 = 0;
 
         /* Pseudo-header */
-        for chunk in src.0.chunks(2).chain(dest.0.chunks(2)) {
+        for chunk in src.0.chunks_exact(2).chain(dest.0.chunks_exact(2)) {
             sum += u32::from(NE::read_u16(chunk));
         }
 
@@ -203,56 +212,76 @@ where
     B: AsMutSlice<Element = u8>,
 {
     /* Constructors */
-    #[allow(dead_code)]
     pub(crate) fn new(buffer: B, elide_checksum: bool, source: u16, destination: u16) -> Self {
-        let mut p = UdpPacket { buffer, payload: 0 };
+        // NHC ID
+        let mut len = 1;
 
-        p.as_mut_slice()[0] = (id::VALUE << id::OFFSET) | 0b0_00; // c = 0, p = 0
+        // ports
+        let p = if source >> 4 == 0xf0b && destination >> 4 == 0xf0b {
+            len += 1;
 
-        if elide_checksum {
-            p.set_c(1);
-        }
+            0b11
+        } else if source >> 8 == 0xf0 {
+            len += 3;
 
-        let mut idx = 1;
-        if source >> 4 == 0xf0b && destination >> 4 == 0xf0b {
-            p.set_p(0b11);
+            0b10
+        } else if destination >> 8 == 0xf0 {
+            len += 3;
 
-            p.as_mut_slice()[idx] = (((source & 0x0f) as u8) << 4) + (destination & 0x0f) as u8;
-            idx += 1;
+            0b01
         } else {
-            if source >> 8 == 0xf0 {
-                p.set_p(0b10);
+            len += 4;
 
-                p.as_mut_slice()[idx] = (source & 0xff) as u8;
-                idx += 1;
+            0b00
+        };
 
-                NE::write_u16(&mut p.as_mut_slice()[idx..idx + 2], destination);
-                idx += 2;
-            } else if destination >> 8 == 0xf0 {
-                p.set_p(0b01);
+        // checksum
+        let mut payload = len as u8;
+        let c = if !elide_checksum {
+            len += 2;
+            payload += 2;
+            0
+        } else {
+            1
+        };
 
-                NE::write_u16(&mut p.as_mut_slice()[idx..idx + 2], source);
-                idx += 2;
+        if buffer.as_slice().len() < len {
+            panic!(); // buffer too small
+        }
 
-                p.as_mut_slice()[idx] = (destination & 0xff) as u8;
-                idx += 1;
-            } else {
-                debug_assert_eq!(p.get_p(), 0);
+        unsafe {
+            let mut up = UdpPacket { buffer, payload };
 
-                NE::write_u16(&mut p.as_mut_slice()[idx..idx + 2], source);
-                idx += 2;
+            // c = 0, p = 0
+            *up.as_mut_slice().gum(0) =
+                (id::VALUE << id::OFFSET) | (c << c::OFFSET) | (p << p::OFFSET);
 
-                NE::write_u16(&mut p.as_mut_slice()[idx..idx + 2], destination);
-                idx += 2;
+            match p {
+                0b00 => {
+                    NE::write_u16(&mut up.as_mut_slice().rm(1..3), source);
+                    NE::write_u16(&mut up.as_mut_slice().rm(3..5), destination);
+                }
+
+                0b01 => {
+                    NE::write_u16(&mut up.as_mut_slice().rm(1..3), source);
+                    *up.as_mut_slice().gum(3) = (destination & 0xff) as u8;
+                }
+
+                0b10 => {
+                    *up.as_mut_slice().gum(1) = (source & 0xff) as u8;
+                    NE::write_u16(&mut up.as_mut_slice().rm(2..4), destination);
+                }
+
+                0b11 => {
+                    *up.as_mut_slice().gum(1) =
+                        (((source & 0x0f) as u8) << 4) + (destination & 0x0f) as u8;
+                }
+
+                _ => {} // unreachable
             }
-        }
 
-        if !elide_checksum {
-            idx += 2;
+            up
         }
-
-        p.payload = idx as u8;
-        p
     }
 
     /// Mutable view into the payload
@@ -270,14 +299,6 @@ where
     }
 
     /* Private */
-    fn set_c(&mut self, c: u8) {
-        set!(*self.header_mut_(), c, c)
-    }
-
-    fn set_p(&mut self, p: u8) {
-        set!(*self.header_mut_(), p, p)
-    }
-
     unsafe fn set_checksum(&mut self, cksum: u16) {
         debug_assert!(!self.get_c());
 
@@ -287,10 +308,6 @@ where
 
     fn as_mut_slice(&mut self) -> &mut [u8] {
         self.buffer.as_mut_slice()
-    }
-
-    fn header_mut_(&mut self) -> &mut u8 {
-        unsafe { self.as_mut_slice().gum(NHC) }
     }
 }
 
