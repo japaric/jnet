@@ -32,7 +32,7 @@ use jnet::{
     ieee802154::{self, SrcDest},
     ipv6,
     ipv6::NextHeader,
-    sixlowpan::iphc,
+    sixlowpan::{iphc, nhc},
 };
 use stlog::{
     global_logger,
@@ -114,10 +114,22 @@ fn run(mut radio: Radio, mut led: Led) -> Option<!> {
                     .map_err(|_| error!("Mrf24j40::transmit failed"))
                     .ok()?;
             }
+
+            Action::UdpReply(mac) => {
+                info!("sending UDP packet");
+
+                led.toggle();
+
+                radio
+                    .transmit(mac.as_bytes())
+                    .map_err(|_| error!("Mrf24j40::transmit failed"))
+                    .ok()?;
+            }
         }
     }
 }
 
+// IO-less / "pure" logic
 #[inline(never)]
 fn on_new_frame<'a>(
     bytes: OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>,
@@ -358,12 +370,55 @@ fn on_new_frame<'a>(
             }
 
             _ => {
-                error!("unexpected next-header field; ignoring");
+                warning!("unexpected next-header field; ignoring");
             }
         }
     } else {
         info!("payload is LOWPAN_NHC encoded");
-    };
+
+        let udp = if let Ok(udp) = nhc::UdpPacket::parse(ip.payload()) {
+            info!("valid UDP packet");
+
+            if !udp.verify_ipv6_checksum(src_nl_addr, dest_nl_addr) {
+                error!("UDP: invalid checksum");
+
+                return Action::Nop;
+            }
+
+            udp
+        } else {
+            error!("invalid UDP packet");
+
+            return Action::Nop;
+        };
+
+        if let Some(dest_addr) = cache.get(&src_nl_addr).cloned() {
+            // echo back the packet
+            let dest_port = udp.get_source();
+            let src_port = udp.get_destination();
+
+            let pan_id = PAN_ID;
+            let src_addr = EXTENDED_ADDRESS.into();
+            let mut mac = ieee802154::Frame::data(
+                OwningSliceTo(extra_buf, BUF_SZ),
+                SrcDest::IntraPan {
+                    pan_id,
+                    src_addr,
+                    dest_addr,
+                },
+            );
+
+            mac.udp(our_nl_addr, src_port, src_nl_addr, dest_port, false, |u| {
+                u.set_payload(udp.payload())
+            });
+
+            return Action::UdpReply(mac);
+        } else {
+            error!("IP address not in the neighbor cache");
+
+            return Action::Nop;
+        }
+    }
 
     Action::Nop
 }
@@ -376,4 +431,6 @@ enum Action<'a> {
     SolicitedNeighborAdvertisement(
         ieee802154::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>,
     ),
+
+    UdpReply(ieee802154::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
 }

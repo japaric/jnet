@@ -386,7 +386,7 @@ fn on_new_packet<'a>(
 
                         udp
                     } else {
-                        error!("not a valid UDP packet");
+                        error!("invalid UDP packet");
 
                         return Action::Nop;
                     };
