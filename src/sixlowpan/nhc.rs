@@ -268,8 +268,8 @@ where
                 }
 
                 0b10 => {
-                    NE::write_u16(&mut up.as_mut_slice().rm(1..3), source);
-                    *up.as_mut_slice().gum(3) = (destination & 0xff) as u8;
+                    *up.as_mut_slice().gum(1) = (source & 0xff) as u8;
+                    NE::write_u16(&mut up.as_mut_slice().rm(2..4), destination);
                 }
 
                 0b11 => {
