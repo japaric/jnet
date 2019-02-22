@@ -22,9 +22,11 @@ stlog = { git = "https://github.com/japaric/stlog", features = ["spanned"] }
 stm32f103xx-hal = { git = "https://github.com/japaric/stm32f103xx-hal", features = ["rt"], rev = "c9d9a86bcb4c493c72b6c5a805e2dd838e2e907f" }
 owning-slice = { git = "https://github.com/japaric/owning-slice" }
 mrf24j40 = { path = "../mrf24j40" }
+ujson = { path = "../ujson" }
 
 [profile.release]
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
 incremental = false
 lto = true # better optimizations
+# opt-level = "z"

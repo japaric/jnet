@@ -375,7 +375,7 @@ where
                 _payload: PhantomData,
                 buffer: bytes,
                 number,
-                marker: marker.unwrap_or(NO_PAYLOAD),
+                marker: marker.map(|m| m + u16(opts_start)).unwrap_or(NO_PAYLOAD),
             })
         } else {
             Err(bytes)
@@ -526,9 +526,11 @@ where
     B: AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /// Fills the payload with the given data and adjusts the length of the CoAP message
+    // TODO return a `Result`
     pub fn set_payload(mut self, data: &[u8]) -> Message<B> {
-        let mut start = self.marker;
-        let len = if !data.is_empty() {
+        if !data.is_empty() {
+            let mut start = self.marker;
+
             // add `PAYLOAD_MARKER`
             self.buffer.as_mut_slice()[usize(start)] = PAYLOAD_MARKER;
             start += 1;
@@ -536,13 +538,26 @@ where
             // now add the payload
             let end = start + u16(data.len()).unwrap();
             self.buffer.as_mut_slice()[usize(start)..usize(end)].copy_from_slice(data);
-            end
-        } else {
-            self.marker = NO_PAYLOAD;
-            start
-        };
 
-        // finally, resize the buffer
+            // finally, resize the buffer
+            self.buffer.truncate(end);
+
+            Message {
+                _payload: PhantomData,
+                buffer: self.buffer,
+                marker: self.marker,
+                number: self.number,
+            }
+        } else {
+            self.no_payload()
+        }
+    }
+
+    /// Finishing constructing this message by leaving the payload empty and truncating the message
+    pub fn no_payload(mut self) -> Message<B> {
+        let len = self.marker;
+        self.marker = NO_PAYLOAD;
+
         self.buffer.truncate(len);
 
         Message {
@@ -553,53 +568,6 @@ where
         }
     }
 }
-
-// impl<B> Message<B>
-// where
-//     B: AsSlice<Element = u8>,
-// {
-//     /* Private */
-//     fn payload_len(&self) -> u16 {
-//         self.payload_marker
-//             .map(|pos| {
-//                 // sanity check
-//                 debug_assert_eq!(self.as_slice()[pos], PAYLOAD_MARKER);
-
-//                 u16(self.as_slice().len() - pos - 1).unwrap()
-//             })
-//             .unwrap_or(0)
-//     }
-
-// }
-
-// impl<B> Message<B>
-// where
-//     B: AsSlice<Element = u8> + Resize,
-// {
-//     /// Truncates the *payload* to the specified length
-//     pub fn truncate(&mut self, len: u16) {
-//         let old_len = self.payload_len();
-//         let start = self.payload_marker;
-
-//         if len < old_len {
-//             self.buffer.truncate(start + len + 1)
-//         }
-//     }
-// }
-
-// impl<B> Message<B>
-// where
-//     B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
-// {
-//     /// Fills the payload with the given data and adjusts the length of the CoAP message
-//     pub fn set_payload(&mut self, data: &[u8]) {
-//         let len = u16(data.len()).unwrap();
-//         assert!(self.payload_len() >= len);
-
-//         self.truncate(len);
-//         self.payload_mut().copy_from_slice(data);
-//     }
-// }
 
 impl<B, P> fmt::Debug for Message<B, P>
 where
@@ -664,17 +632,17 @@ where
             s.field("options", &Options(self));
         }
 
-        if typeid!(P == Set) {
-            if self.marker != NO_PAYLOAD {
-                let payload = unsafe { &self.as_slice().rf(usize(self.marker + 1)..) };
+        // if typeid!(P == Set) {
+        //     if self.marker != NO_PAYLOAD {
+        //         let payload = unsafe { &self.as_slice().rf(usize(self.marker + 1)..) };
 
-                if let Ok(p) = str::from_utf8(payload) {
-                    s.field("payload", &p);
-                } else {
-                    s.field("payload", &payload);
-                }
-            }
-        }
+        //         if let Ok(p) = str::from_utf8(payload) {
+        //             s.field("payload", &p);
+        //         } else {
+        //             s.field("payload", &payload);
+        //         }
+        //     }
+        // }
 
         s.finish()
     }
@@ -1050,7 +1018,7 @@ mod tests {
 
         let coap = coap::Message::new(buf, 0);
         assert_eq!(usize(coap.len()), SZ);
-        let m = coap.set_payload(&[]);
+        let m = coap.no_payload();
         assert_eq!(m.payload(), &[]);
         assert_eq!(usize(m.len()), SZ);
     }

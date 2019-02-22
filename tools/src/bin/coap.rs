@@ -103,8 +103,9 @@ fn main() -> Result<(), Error> {
     let mut buf = [0; 128];
     let tx_buf = &mut buf[..];
     let mut mtx = coap::Message::new(tx_buf, 0);
+    // FIXME multicast messages must be Non-Confirmable
     mtx.set_type(coap::Type::Confirmable);
-    let mid = 0;
+    let mid = rng.gen();
     mtx.set_code(method);
     mtx.set_message_id(mid);
     if let Some(segments) = url.path_segments() {

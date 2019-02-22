@@ -1,0 +1,12 @@
+[package]
+name = "ujson-macros"
+version = "0.1.0"
+authors = ["Jorge Aparicio <jorge@japaric.io>"]
+edition = "2018"
+
+[dependencies]
+syn = "0.15.26"
+quote = "0.6.11"
+
+[lib]
+proc-macro = true
