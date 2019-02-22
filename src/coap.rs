@@ -375,7 +375,7 @@ where
                 _payload: PhantomData,
                 buffer: bytes,
                 number,
-                marker: marker.unwrap_or(NO_PAYLOAD),
+                marker: marker.map(|m| m + u16(opts_start)).unwrap_or(NO_PAYLOAD),
             })
         } else {
             Err(bytes)
@@ -526,9 +526,11 @@ where
     B: AsMutSlice<Element = u8> + Truncate<u16>,
 {
     /// Fills the payload with the given data and adjusts the length of the CoAP message
+    // TODO return a `Result`
     pub fn set_payload(mut self, data: &[u8]) -> Message<B> {
-        let mut start = self.marker;
-        let len = if !data.is_empty() {
+        if !data.is_empty() {
+            let mut start = self.marker;
+
             // add `PAYLOAD_MARKER`
             self.buffer.as_mut_slice()[usize(start)] = PAYLOAD_MARKER;
             start += 1;
@@ -536,13 +538,26 @@ where
             // now add the payload
             let end = start + u16(data.len()).unwrap();
             self.buffer.as_mut_slice()[usize(start)..usize(end)].copy_from_slice(data);
-            end
-        } else {
-            self.marker = NO_PAYLOAD;
-            start
-        };
 
-        // finally, resize the buffer
+            // finally, resize the buffer
+            self.buffer.truncate(end);
+
+            Message {
+                _payload: PhantomData,
+                buffer: self.buffer,
+                marker: self.marker,
+                number: self.number,
+            }
+        } else {
+            self.no_payload()
+        }
+    }
+
+    /// Finishing constructing this message by leaving the payload empty and truncating the message
+    pub fn no_payload(mut self) -> Message<B> {
+        let len = self.marker;
+        self.marker = NO_PAYLOAD;
+
         self.buffer.truncate(len);
 
         Message {
@@ -1050,7 +1065,7 @@ mod tests {
 
         let coap = coap::Message::new(buf, 0);
         assert_eq!(usize(coap.len()), SZ);
-        let m = coap.set_payload(&[]);
+        let m = coap.no_payload();
         assert_eq!(m.payload(), &[]);
         assert_eq!(usize(m.len()), SZ);
     }
