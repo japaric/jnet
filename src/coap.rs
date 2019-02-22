@@ -679,17 +679,17 @@ where
             s.field("options", &Options(self));
         }
 
-        if typeid!(P == Set) {
-            if self.marker != NO_PAYLOAD {
-                let payload = unsafe { &self.as_slice().rf(usize(self.marker + 1)..) };
+        // if typeid!(P == Set) {
+        //     if self.marker != NO_PAYLOAD {
+        //         let payload = unsafe { &self.as_slice().rf(usize(self.marker + 1)..) };
 
-                if let Ok(p) = str::from_utf8(payload) {
-                    s.field("payload", &p);
-                } else {
-                    s.field("payload", &payload);
-                }
-            }
-        }
+        //         if let Ok(p) = str::from_utf8(payload) {
+        //             s.field("payload", &p);
+        //         } else {
+        //             s.field("payload", &payload);
+        //         }
+        //     }
+        // }
 
         s.finish()
     }
