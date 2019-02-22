@@ -19,16 +19,18 @@ use blue_pill::{Ethernet, Led, CACHE_SIZE, IP, MAC};
 use cast::usize;
 use cortex_m_rt::entry;
 use heapless::FnvIndexMap;
-use jnet::{arp, ether, icmp, ipv4, mac, udp};
+use jnet::{arp, coap, ether, icmp, ipv4, mac, udp};
 use stlog::{
     global_logger,
     spanned::{error, info, warning},
 };
 use stm32f103xx_hal::{prelude::*, stm32f103xx};
+use ujson::{uDeserialize, uSerialize};
 
 #[global_logger]
 static LOGGER: blue_pill::ItmLogger = blue_pill::ItmLogger;
 // static LOGGER: stlog::NullLogger = stlog::NullLogger; // alt: no logs
+// NOTE(^) LLD errors with `NullLogger` so you have to switch to GNU LD (see .cargo/config)
 
 #[entry]
 fn main() -> ! {
@@ -57,10 +59,13 @@ fn main() -> ! {
     });
 }
 
+const BUF_SZ: usize = 256;
+
 // main logic
 fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
     let mut cache = FnvIndexMap::new();
-    let mut buf = [0; 256];
+    let mut buf = [0; BUF_SZ];
+    let mut extra_buf = [0; BUF_SZ];
     loop {
         let packet = if let Some(packet) = ethernet
             .next_packet()
@@ -88,7 +93,14 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
         info!("new packet");
 
-        match on_new_packet(packet, &mut cache) {
+        match on_new_packet(
+            &State {
+                led: led.is_set_low(),
+            },
+            packet,
+            &mut cache,
+            &mut extra_buf,
+        ) {
             Action::ArpReply(eth) => {
                 info!("sending ARP reply");
 
@@ -102,6 +114,27 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
                 info!("sending 'Echo Reply' ICMP message");
 
                 led.toggle();
+
+                ethernet
+                    .transmit(eth.as_bytes())
+                    .map_err(|_| error!("Enc28j60::transmit failed"))
+                    .ok()?;
+            }
+
+            Action::CoAP(change, eth) => {
+                if let Some(on) = change {
+                    info!("changing LED state");
+
+                    if on {
+                        led.set_low()
+                    } else {
+                        led.set_high()
+                    }
+                }
+
+                info!("sending CoAP message");
+
+                // cortex_m_semihosting::hprintln!("{:?}", eth.as_bytes()).ok();
 
                 ethernet
                     .transmit(eth.as_bytes())
@@ -125,10 +158,21 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
     }
 }
 
+struct State {
+    led: bool,
+}
+
+#[derive(uDeserialize, uSerialize)]
+struct Payload {
+    led: bool,
+}
+
 // IO-less / "pure" logic
 fn on_new_packet<'a>(
+    state: &State,
     bytes: &'a mut [u8],
     cache: &mut FnvIndexMap<ipv4::Addr, mac::Addr, CACHE_SIZE>,
+    extra_buf: &'a mut [u8],
 ) -> Action<'a> {
     let mut eth = if let Ok(f) = ether::Frame::parse(bytes) {
         info!("valid Ethernet frame");
@@ -258,10 +302,66 @@ fn on_new_packet<'a>(
                     if let Ok(mut udp) = udp::Packet::parse(ip.payload_mut()) {
                         info!("valid UDP packet");
 
-                        if let Some(src_mac) = cache.get(&src_ip) {
+                        let src_mac = if let Some(mac) = cache.get(&src_ip) {
+                            mac
+                        } else {
+                            error!("the IP address of the sender is not in the ARP cache");
+
+                            return Action::Nop;
+                        };
+
+                        let dst_port = udp.get_destination();
+
+                        if dst_port == coap::PORT {
+                            info!("UDP: destination port is our CoAP port");
+
+                            let coap = if let Ok(m) = coap::Message::parse(udp.payload()) {
+                                info!("valid CoAP message");
+
+                                m
+                            } else {
+                                warning!("invalid CoAP message; ignoring");
+
+                                return Action::Nop;
+                            };
+
+                            if !coap.get_code().is_request()
+                                || match coap.get_type() {
+                                    coap::Type::Confirmable | coap::Type::NonConfirmable => false,
+                                    _ => true,
+                                }
+                            {
+                                warning!("CoAP message is not a valid request; ignoring");
+
+                                return Action::Nop;
+                            }
+
+                            let src_port = udp.get_source();
+
+                            // prepare a response
+                            let mut eth = ether::Frame::new(extra_buf);
+                            eth.set_destination(*src_mac);
+                            eth.set_source(MAC);
+
+                            let mut change = None;
+                            eth.ipv4(|ip| {
+                                ip.set_source(IP);
+                                ip.set_destination(src_ip);
+
+                                ip.udp(|udp| {
+                                    udp.set_source(coap::PORT);
+                                    udp.set_destination(src_port);
+
+                                    udp.coap(0, |resp| {
+                                        on_coap_request(state, coap, resp, &mut change)
+                                    })
+                                });
+                            });
+
+                            return Action::CoAP(change, eth);
+                        } else {
                             // echo back the packet
                             let src_port = udp.get_source();
-                            let dst_port = udp.get_destination();
 
                             // we build the response in-place
                             // update the UDP header
@@ -279,10 +379,6 @@ fn on_new_packet<'a>(
                             eth.set_source(MAC);
 
                             return Action::UdpReply(eth);
-                        } else {
-                            error!("IP address not in the ARP cache");
-
-                            return Action::Nop;
                         }
                     } else {
                         error!("not a valid UDP packet");
@@ -305,9 +401,97 @@ fn on_new_packet<'a>(
     Action::Nop
 }
 
+fn on_coap_request<'a>(
+    state: &State,
+    req: coap::Message<&[u8]>,
+    mut resp: coap::Message<&'a mut [u8], coap::Unset>,
+    change: &mut Option<bool>,
+) -> coap::Message<&'a mut [u8]> {
+    let code = req.get_code();
+
+    resp.set_message_id(req.get_message_id());
+    resp.set_type(if req.get_type() == coap::Type::Confirmable {
+        coap::Type::Acknowledgement
+    } else {
+        coap::Type::NonConfirmable
+    });
+
+    if code == coap::Method::Get.into() {
+        info!("CoAP: GET request");
+
+        let mut opts = req.options();
+        while let Some(opt) = opts.next() {
+            if opt.number() == coap::OptionNumber::UriPath {
+                if opt.value() == b"led" && opts.next().is_none() {
+                    info!("CoAP: GET /led");
+
+                    let mut tmp = [0; 13];
+                    let payload =
+                        ujson::write(&Payload { led: state.led }, &mut tmp).expect("unreachable");
+
+                    resp.set_code(coap::Response::Content);
+                    return resp.set_payload(payload.as_bytes());
+                } else {
+                    // fall-through: Not Found
+                    break;
+                }
+            } else {
+                error!("CoAP: Bad Option");
+
+                resp.set_code(coap::Response::BadOption);
+                return resp.no_payload();
+            }
+        }
+    } else if code == coap::Method::Put.into() {
+        info!("CoAP: PUT request");
+
+        let mut opts = req.options();
+        while let Some(opt) = opts.next() {
+            if opt.number() == coap::OptionNumber::UriPath {
+                if opt.value() == b"led" && opts.next().is_none() {
+                    info!("CoAP: PUT /led");
+
+                    if let Ok(payload) = ujson::from_bytes::<Payload>(req.payload()) {
+                        info!("CoAP: Changed");
+
+                        *change = Some(payload.led);
+
+                        resp.set_code(coap::Response::Changed);
+                        return resp.no_payload();
+                    } else {
+                        error!("CoAP: Bad Request");
+
+                        resp.set_code(coap::Response::BadRequest);
+                        return resp.no_payload();
+                    }
+                } else {
+                    // fall-through: Not Found
+                    break;
+                }
+            } else {
+                error!("CoAP: Bad Option");
+
+                resp.set_code(coap::Response::BadOption);
+                return resp.no_payload();
+            }
+        }
+    } else {
+        info!("CoAP: Method Not Allowed");
+
+        resp.set_code(coap::Response::MethodNotAllowed);
+        return resp.no_payload();
+    }
+
+    error!("CoAP: Not Found");
+
+    resp.set_code(coap::Response::NotFound);
+    resp.no_payload()
+}
+
 enum Action<'a> {
     ArpReply(ether::Frame<&'a mut [u8]>),
     EchoReply(ether::Frame<&'a mut [u8]>),
-    UdpReply(ether::Frame<&'a mut [u8]>),
+    CoAP(Option<bool>, ether::Frame<&'a mut [u8]>),
     Nop,
+    UdpReply(ether::Frame<&'a mut [u8]>),
 }

@@ -4,7 +4,8 @@ This directory contains firmware examples that make use of the `jnet` crate.
 
 All these examples feature:
 
-- Proper error handling. No `unwrap`-ing `Result`s or `Option`s.
+- Proper error handling. No `unwrap`-ing `Result`s or `Option`s. Exception: pure
+  operations that are known to not fail (e.g. `"0".parse::<u8>()`).
 
 - Fatal I/O errors are handled using a "fatal error" handler rather than the
   panic handler, which is reserved for programmer errors (AKA bugs).
@@ -22,8 +23,8 @@ List of examples:
 
 ## `ipv4`
 
-A simplified IPv4 stack. This stack responds to "ping"s and echoes back UDP
-packets.
+A simplified IPv4 stack. This stack responds to "ping"s, echoes back UDP packets
+and exposes an LED as a CoAP resource.
 
 ### Caveats
 
@@ -132,6 +133,81 @@ Feb 20 00:22:42.354 INFO valid IPv4 packet, loc: examples/ipv4.rs:224
 Feb 20 00:22:42.354 INFO IPv4 protocol: UDP, loc: examples/ipv4.rs:286
 Feb 20 00:22:42.354 INFO valid UDP packet, loc: examples/ipv4.rs:289
 Feb 20 00:22:42.354 INFO sending UDP packet, loc: examples/ipv4.rs:143
+```
+
+### `coap` test
+
+The `coap` tool is in the `/tools` directory. Install it first.
+
+On a Linux host issue these commands:
+
+- `GET /led`, returns the state of the LED
+
+``` console
+$ coap GET coap://192.168.1.33/led
+-> coap::Message { version: 1, type: Confirmable, code: Method::Get, message_id: 19248, options: {UriPath: "led"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::Content, message_id: 19248 }
+{"led":true}
+```
+
+``` text
+Feb 22 21:58:56.041 INFO new packet, loc: examples/ipv4.rs:93
+Feb 22 21:58:56.041 INFO valid Ethernet frame, loc: examples/ipv4.rs:178
+Feb 22 21:58:56.041 INFO EtherType: IPv4, loc: examples/ipv4.rs:235
+Feb 22 21:58:56.041 INFO valid IPv4 packet, loc: examples/ipv4.rs:238
+Feb 22 21:58:56.041 INFO IPv4 protocol: UDP, loc: examples/ipv4.rs:300
+Feb 22 21:58:56.041 INFO valid UDP packet, loc: examples/ipv4.rs:303
+Feb 22 21:58:56.041 INFO UDP: destination port is our CoAP port, loc: examples/ipv4.rs:316
+Feb 22 21:58:56.041 INFO valid CoAP message, loc: examples/ipv4.rs:319
+Feb 22 21:58:56.041 INFO CoAP: GET request, loc: examples/ipv4.rs:421
+Feb 22 21:58:56.041 INFO CoAP: GET /led, loc: examples/ipv4.rs:427
+Feb 22 21:58:56.041 INFO sending CoAP message, loc: examples/ipv4.rs:134
+```
+
+- `GET /brightness`, returns "Not Found" because this resource doesn't exist
+
+``` console
+$ coap GET coap://192.168.1.33/brightness
+-> coap::Message { version: 1, type: Confirmable, code: Method::Get, message_id: 7984, options: {UriPath: "brightness"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::NotFound, message_id: 7984 }
+```
+
+``` text
+Feb 22 21:59:56.825 INFO new packet, loc: examples/ipv4.rs:93
+Feb 22 21:59:56.825 INFO valid Ethernet frame, loc: examples/ipv4.rs:178
+Feb 22 21:59:56.825 INFO EtherType: IPv4, loc: examples/ipv4.rs:235
+Feb 22 21:59:56.825 INFO valid IPv4 packet, loc: examples/ipv4.rs:238
+Feb 22 21:59:56.825 INFO IPv4 protocol: UDP, loc: examples/ipv4.rs:300
+Feb 22 21:59:56.825 INFO valid UDP packet, loc: examples/ipv4.rs:303
+Feb 22 21:59:56.825 INFO UDP: destination port is our CoAP port, loc: examples/ipv4.rs:316
+Feb 22 21:59:56.825 INFO valid CoAP message, loc: examples/ipv4.rs:319
+Feb 22 21:59:56.825 INFO CoAP: GET request, loc: examples/ipv4.rs:421
+Feb 22 21:59:56.825 ERRO CoAP: Not Found, loc: examples/ipv4.rs:486
+Feb 22 21:59:56.825 INFO sending CoAP message, loc: examples/ipv4.rs:134
+```
+
+- `PUT /led`, changes the state of the LED
+
+``` console
+$ coap PUT coap://192.168.1.33/led '{"led":false}'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Put, message_id: 4030, options: {UriPath: "led"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::Changed, message_id: 4030 }
+```
+
+``` text
+Feb 22 22:02:02.330 INFO new packet, loc: examples/ipv4.rs:93
+Feb 22 22:02:02.331 INFO valid Ethernet frame, loc: examples/ipv4.rs:178
+Feb 22 22:02:02.331 INFO EtherType: IPv4, loc: examples/ipv4.rs:235
+Feb 22 22:02:02.331 INFO valid IPv4 packet, loc: examples/ipv4.rs:238
+Feb 22 22:02:02.331 INFO IPv4 protocol: UDP, loc: examples/ipv4.rs:300
+Feb 22 22:02:02.331 INFO valid UDP packet, loc: examples/ipv4.rs:303
+Feb 22 22:02:02.331 INFO UDP: destination port is our CoAP port, loc: examples/ipv4.rs:316
+Feb 22 22:02:02.331 INFO valid CoAP message, loc: examples/ipv4.rs:319
+Feb 22 22:02:02.331 INFO CoAP: PUT request, loc: examples/ipv4.rs:447
+Feb 22 22:02:02.331 INFO CoAP: PUT /led, loc: examples/ipv4.rs:453
+Feb 22 22:02:02.331 INFO CoAP: Changed, loc: examples/ipv4.rs:456
+Feb 22 22:02:02.331 INFO changing LED state, loc: examples/ipv4.rs:125
+Feb 22 22:02:02.331 INFO sending CoAP message, loc: examples/ipv4.rs:134
 ```
 
 ## `ipv6`
