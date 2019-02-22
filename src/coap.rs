@@ -569,53 +569,6 @@ where
     }
 }
 
-// impl<B> Message<B>
-// where
-//     B: AsSlice<Element = u8>,
-// {
-//     /* Private */
-//     fn payload_len(&self) -> u16 {
-//         self.payload_marker
-//             .map(|pos| {
-//                 // sanity check
-//                 debug_assert_eq!(self.as_slice()[pos], PAYLOAD_MARKER);
-
-//                 u16(self.as_slice().len() - pos - 1).unwrap()
-//             })
-//             .unwrap_or(0)
-//     }
-
-// }
-
-// impl<B> Message<B>
-// where
-//     B: AsSlice<Element = u8> + Resize,
-// {
-//     /// Truncates the *payload* to the specified length
-//     pub fn truncate(&mut self, len: u16) {
-//         let old_len = self.payload_len();
-//         let start = self.payload_marker;
-
-//         if len < old_len {
-//             self.buffer.truncate(start + len + 1)
-//         }
-//     }
-// }
-
-// impl<B> Message<B>
-// where
-//     B: AsSlice<Element = u8> + AsMutSlice<Element = u8> + Resize,
-// {
-//     /// Fills the payload with the given data and adjusts the length of the CoAP message
-//     pub fn set_payload(&mut self, data: &[u8]) {
-//         let len = u16(data.len()).unwrap();
-//         assert!(self.payload_len() >= len);
-
-//         self.truncate(len);
-//         self.payload_mut().copy_from_slice(data);
-//     }
-// }
-
 impl<B, P> fmt::Debug for Message<B, P>
 where
     B: AsSlice<Element = u8>,
