@@ -177,7 +177,7 @@ where
 
     /// Sets the Destination (port) field of the header
     fn set_checksum(&mut self, checksum: u16) {
-        NE::write_u16(&mut self.as_mut_slice()[CHECKSUM], checksum)
+        NE::write_u16(&mut self.header_mut_()[CHECKSUM], checksum)
     }
 
     /* Miscellaneous */
