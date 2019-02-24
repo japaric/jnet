@@ -212,8 +212,8 @@ Feb 22 22:02:02.331 INFO sending CoAP message, loc: examples/ipv4.rs:134
 
 ## `ipv6`
 
-A simplified IPv6 stack. This stack responds to "ping"s and echoes back UDP
-packets.
+A simplified IPv6 stack. This stack responds to "ping"s echoes back UDP packets
+and exposes an LED as a CoAP resource.
 
 ### Caveats
 
@@ -323,6 +323,84 @@ Feb 20 00:32:07.495 INFO Updating the Neighbor cache, loc: examples/ipv6.rs:202
 Feb 20 00:32:07.495 INFO IPv6 next-header: UDP, loc: examples/ipv6.rs:374
 Feb 20 00:32:07.495 INFO valid UDP packet, loc: examples/ipv6.rs:377
 Feb 20 00:32:07.495 INFO sending UDP packet, loc: examples/ipv6.rs:139
+```
+
+### `coap` test
+
+The `coap` tool is in the `/tools` directory. Install it first.
+
+On a Linux host issue these commands:
+
+- `GET /led`, returns the state of the LED
+
+``` console
+$ coap -I wlan0 GET 'coap://[fe80::2219:2ff:fe01:2359]/led'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Get, message_id: 4226, options: {UriPath: "led"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::Content, message_id: 4226 }
+{"led":false}
+```
+
+``` text
+Feb 24 22:52:54.526 INFO new packet, loc: examples/ipv6.rs:113
+Feb 24 22:52:54.526 INFO valid Ethernet frame, loc: examples/ipv6.rs:195
+Feb 24 22:52:54.526 INFO EtherType: IPv6, loc: examples/ipv6.rs:221
+Feb 24 22:52:54.526 INFO valid IPv6 packet, loc: examples/ipv6.rs:224
+Feb 24 22:52:54.526 INFO Updating the Neighbor cache, loc: examples/ipv6.rs:239
+Feb 24 22:52:54.526 INFO IPv6 next-header: UDP, loc: examples/ipv6.rs:410
+Feb 24 22:52:54.526 INFO valid UDP packet, loc: examples/ipv6.rs:413
+Feb 24 22:52:54.526 INFO UDP: destination port is our CoAP port, loc: examples/ipv6.rs:439
+Feb 24 22:52:54.526 INFO valid CoAP message, loc: examples/ipv6.rs:442
+Feb 24 22:52:54.526 INFO CoAP: GET request, loc: examples/ipv6.rs:540
+Feb 24 22:52:54.526 INFO CoAP: GET /led, loc: examples/ipv6.rs:546
+Feb 24 22:52:54.526 INFO sending CoAP message, loc: examples/ipv6.rs:134
+```
+
+- `GET /brightness`, returns "Not Found" because this resource doesn't exist
+
+``` console
+$ coap -I wlan0 GET 'coap://[fe80::2219:2ff:fe01:2359]/brightness'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Get, message_id: 3536, options: {UriPath: "brightness"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::NotFound, message_id: 3536 }
+```
+
+``` text
+Feb 24 22:54:37.543 INFO new packet, loc: examples/ipv6.rs:113
+Feb 24 22:54:37.543 INFO valid Ethernet frame, loc: examples/ipv6.rs:195
+Feb 24 22:54:37.543 INFO EtherType: IPv6, loc: examples/ipv6.rs:221
+Feb 24 22:54:37.543 INFO valid IPv6 packet, loc: examples/ipv6.rs:224
+Feb 24 22:54:37.543 INFO Updating the Neighbor cache, loc: examples/ipv6.rs:239
+Feb 24 22:54:37.543 INFO IPv6 next-header: UDP, loc: examples/ipv6.rs:410
+Feb 24 22:54:37.543 INFO valid UDP packet, loc: examples/ipv6.rs:413
+Feb 24 22:54:37.543 INFO UDP: destination port is our CoAP port, loc: examples/ipv6.rs:439
+Feb 24 22:54:37.543 INFO valid CoAP message, loc: examples/ipv6.rs:442
+Feb 24 22:54:37.543 INFO CoAP: GET request, loc: examples/ipv6.rs:540
+Feb 24 22:54:37.543 ERRO CoAP: Not Found, loc: examples/ipv6.rs:605
+Feb 24 22:54:37.543 INFO sending CoAP message, loc: examples/ipv6.rs:134
+```
+
+- `PUT /led`, changes the state of the LED
+
+``` console
+$ coap -I wlan0 PUT 'coap://[fe80::2219:2ff:fe01:2359]/led' '{"led":true}'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Put, message_id: 16052, options: {UriPath: "led"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::Changed, message_id: 16052 }
+```
+
+``` text
+Feb 24 22:55:37.487 INFO new packet, loc: examples/ipv6.rs:113
+Feb 24 22:55:37.487 INFO valid Ethernet frame, loc: examples/ipv6.rs:195
+Feb 24 22:55:37.487 INFO EtherType: IPv6, loc: examples/ipv6.rs:221
+Feb 24 22:55:37.487 INFO valid IPv6 packet, loc: examples/ipv6.rs:224
+Feb 24 22:55:37.487 INFO Updating the Neighbor cache, loc: examples/ipv6.rs:239
+Feb 24 22:55:37.487 INFO IPv6 next-header: UDP, loc: examples/ipv6.rs:410
+Feb 24 22:55:37.487 INFO valid UDP packet, loc: examples/ipv6.rs:413
+Feb 24 22:55:37.487 INFO UDP: destination port is our CoAP port, loc: examples/ipv6.rs:439
+Feb 24 22:55:37.487 INFO valid CoAP message, loc: examples/ipv6.rs:442
+Feb 24 22:55:37.487 INFO CoAP: PUT request, loc: examples/ipv6.rs:566
+Feb 24 22:55:37.487 INFO CoAP: PUT /led, loc: examples/ipv6.rs:572
+Feb 24 22:55:37.487 INFO CoAP: Changed, loc: examples/ipv6.rs:575
+Feb 24 22:55:37.487 INFO changing LED state, loc: examples/ipv6.rs:125
+Feb 24 22:55:37.487 INFO sending CoAP message, loc: examples/ipv6.rs:134
 ```
 
 ## `sixlowpan`
