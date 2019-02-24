@@ -134,8 +134,6 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
                 info!("sending CoAP message");
 
-                // cortex_m_semihosting::hprintln!("{:?}", eth.as_bytes()).ok();
-
                 ethernet
                     .transmit(eth.as_bytes())
                     .map_err(|_| error!("Enc28j60::transmit failed"))

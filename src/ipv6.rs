@@ -19,7 +19,7 @@ use hash32_derive::Hash32;
 use owning_slice::Truncate;
 
 pub use crate::ipv4::Protocol as NextHeader;
-use crate::{fmt::Quoted, icmpv6, mac, traits::UncheckedIndex};
+use crate::{fmt::Quoted, icmpv6, mac, traits::UncheckedIndex, udp};
 
 /* Packet structure */
 const V: usize = 0;
@@ -293,19 +293,42 @@ where
     ) {
         let src = self.get_source();
         let dest = self.get_destination();
+
+        self.set_next_header(NextHeader::Ipv6Icmp);
+
         let mut message = icmpv6::Message::neighbor_advertisement(
             self.payload_mut(),
             if target_ll_addr.is_some() { 1 } else { 0 },
         );
+
         f(&mut message);
+
         if let Some(target_ll_addr) = target_ll_addr {
             unsafe {
                 message.set_target_mac_addr(target_ll_addr);
             }
         }
+
         message.update_checksum(src, dest);
 
         let len = message.as_bytes().len() as u16;
+        self.truncate(len);
+    }
+
+    /// Fills the payload with a UDP packet
+    pub fn udp(&mut self, f: impl FnOnce(&mut udp::Packet<&mut [u8]>)) {
+        let src = self.get_source();
+        let dest = self.get_destination();
+
+        self.set_next_header(NextHeader::Udp);
+
+        let mut packet = udp::Packet::new(self.payload_mut());
+
+        f(&mut packet);
+
+        packet.update_ipv6_checksum(src, dest);
+
+        let len = packet.as_bytes().len() as u16;
         self.truncate(len);
     }
 
