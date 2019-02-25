@@ -35,6 +35,9 @@ and exposes an LED as a CoAP resource.
 - The device will *not* attempt to ARP request IP addresses it doesn't know
 about
 
+- ~Rust~ The device never sleeps; it always polls the Ethernet interface for new
+  frames.
+
 ### `ping` test
 
 On a Linux host issue these commands:
@@ -221,6 +224,9 @@ and exposes an LED as a CoAP resource.
 
 - The device will *not* send Neighbor Solicitations for IP addresses it doesn't
   know about.
+
+- ~Rust~ The device never sleeps; it always polls the Ethernet interface for new
+  frames.
 
 ### `ping` test
 
@@ -412,6 +418,9 @@ packets and exposes an LED as a CoAP resource.
 
 - The device will *not* send Neighbor Solicitations for IP addresses it doesn't
   know about.
+
+- ~Rust~ The device never sleeps; it always polls the 802.15.4 interface for new
+  frames.
 
 ### Setup
 
