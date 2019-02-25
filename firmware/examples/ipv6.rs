@@ -184,7 +184,7 @@ struct Payload {
     led: bool,
 }
 
-// IO-less / "pure" logic
+// IO-less / "pure" logic (NB logging does IO but it's easy to remove using `GLOBAL_LOGGER`)
 fn on_new_packet<'a>(
     state: &State,
     bytes: OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>,
@@ -434,6 +434,7 @@ fn on_new_packet<'a>(
                     };
 
                     let dst_port = udp.get_destination();
+                    let src_port = udp.get_source();
 
                     if dst_port == coap::PORT {
                         info!("UDP: destination port is our CoAP port");
@@ -459,8 +460,6 @@ fn on_new_packet<'a>(
                             return Action::Nop;
                         }
 
-                        let src_port = udp.get_source();
-
                         // prepare a response
                         let mut eth = ether::Frame::new(OwningSliceTo(extra_buf, BUF_SZ));
                         eth.set_destination(*src_mac);
@@ -482,8 +481,6 @@ fn on_new_packet<'a>(
                         return Action::CoAP(change, eth);
                     } else {
                         // echo back the packet
-                        let src_port = udp.get_source();
-                        let dst_port = udp.get_destination();
 
                         // we build the response in-place
                         // update the UDP header
@@ -613,8 +610,12 @@ enum Action<'a> {
         Option<bool>,
         ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>,
     ),
+
     EchoReply(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
+
     Nop,
+
     SolicitedNeighborAdvertisement(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
+
     UdpReply(ether::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
 }

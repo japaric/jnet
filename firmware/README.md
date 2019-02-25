@@ -19,7 +19,7 @@ List of examples:
 
 - [`ipv4`](#ipv4), a simplified IPv4 over Ethernet stack.
 - [`ipv6`](#ipv6), a simplified IPv6 over Ethernet stack.
-- [`sixlowpan`](#sixlowpan), an IPv6 over 802.15.4 stack.
+- [`sixlowpan`](#sixlowpan), a simplified IPv6 over 802.15.4 stack.
 
 ## `ipv4`
 
@@ -405,8 +405,13 @@ Feb 24 22:55:37.487 INFO sending CoAP message, loc: examples/ipv6.rs:134
 
 ## `sixlowpan`
 
-A simple 6LoWPAN stack. This stack responds to "ping"s and echoes back UDP
-packets.
+A simplified 6LoWPAN stack. This stack responds to "ping"s, echoes back UDP
+packets and exposes an LED as a CoAP resource.
+
+### Caveats
+
+- The device will *not* send Neighbor Solicitations for IP addresses it doesn't
+  know about.
 
 ### Setup
 
@@ -552,4 +557,79 @@ Feb 21 20:26:32.160 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs
 Feb 21 20:26:32.160 INFO payload is LOWPAN_NHC encoded, loc: examples/sixlowpan.rs:377
 Feb 21 20:26:32.160 INFO valid UDP packet, loc: examples/sixlowpan.rs:380
 Feb 21 20:26:32.160 INFO sending UDP packet, loc: examples/sixlowpan.rs:119
+```
+
+### `coap` test
+
+The `coap` tool is in the `/tools` directory. Install it first.
+
+On a Linux host issue these commands:
+
+- `GET /led`, returns the state of the LED
+
+``` console
+$ coap -I lowpan0 GET 'coap://[fe80::2219:220:23:5959]/led'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Get, message_id: 17288, options: {UriPath: "led"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::Content, message_id: 17288 }
+{"led":true}
+```
+
+``` text
+Feb 25 02:51:45.784 INFO new packet, loc: examples/sixlowpan.rs:94
+Feb 25 02:51:45.784 INFO valid MAC frame, loc: examples/sixlowpan.rs:176
+Feb 25 02:51:45.784 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:219
+Feb 25 02:51:45.784 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:240
+Feb 25 02:51:45.784 INFO payload is LOWPAN_NHC encoded, loc: examples/sixlowpan.rs:413
+Feb 25 02:51:45.784 INFO valid UDP packet, loc: examples/sixlowpan.rs:416
+Feb 25 02:51:45.784 INFO UDP: destination port is our CoAP port, loc: examples/sixlowpan.rs:443
+Feb 25 02:51:45.784 INFO valid CoAP message, loc: examples/sixlowpan.rs:446
+Feb 25 02:51:45.784 INFO CoAP: GET request, loc: examples/sixlowpan.rs:524
+Feb 25 02:51:45.785 INFO CoAP: GET /led, loc: examples/sixlowpan.rs:530
+Feb 25 02:51:45.785 INFO sending CoAP message, loc: examples/sixlowpan.rs:115
+```
+
+- `GET /brightness`, returns "Not Found" because this resource doesn't exist
+
+``` console
+$ coap -I lowpan0 GET 'coap://[fe80::2219:220:23:5959]/brightness'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Get, message_id: 38597, options: {UriPath: "brightness"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::NotFound, message_id: 38597 }
+```
+
+``` text
+Feb 25 02:52:55.583 INFO new packet, loc: examples/sixlowpan.rs:94
+Feb 25 02:52:55.583 INFO valid MAC frame, loc: examples/sixlowpan.rs:176
+Feb 25 02:52:55.583 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:219
+Feb 25 02:52:55.583 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:240
+Feb 25 02:52:55.583 INFO payload is LOWPAN_NHC encoded, loc: examples/sixlowpan.rs:413
+Feb 25 02:52:55.583 INFO valid UDP packet, loc: examples/sixlowpan.rs:416
+Feb 25 02:52:55.583 INFO UDP: destination port is our CoAP port, loc: examples/sixlowpan.rs:443
+Feb 25 02:52:55.583 INFO valid CoAP message, loc: examples/sixlowpan.rs:446
+Feb 25 02:52:55.583 INFO CoAP: GET request, loc: examples/sixlowpan.rs:524
+Feb 25 02:52:55.583 ERRO CoAP: Not Found, loc: examples/sixlowpan.rs:589
+Feb 25 02:52:55.583 INFO sending CoAP message, loc: examples/sixlowpan.rs:115
+```
+
+- `PUT /led`, changes the state of the LED
+
+``` console
+$ coap -I lowpan0 PUT 'coap://[fe80::2219:220:23:5959]/led' '{"led":false}'
+-> coap::Message { version: 1, type: Confirmable, code: Method::Put, message_id: 3014, options: {UriPath: "led"} }
+<- coap::Message { version: 1, type: Acknowledgement, code: Response::Changed, message_id: 3014 }
+```
+
+``` text
+Feb 25 02:53:31.024 INFO new packet, loc: examples/sixlowpan.rs:94
+Feb 25 02:53:31.025 INFO valid MAC frame, loc: examples/sixlowpan.rs:176
+Feb 25 02:53:31.025 INFO valid 6LoWPAN packet, loc: examples/sixlowpan.rs:219
+Feb 25 02:53:31.025 INFO Updating the Neighbor cache, loc: examples/sixlowpan.rs:240
+Feb 25 02:53:31.025 INFO payload is LOWPAN_NHC encoded, loc: examples/sixlowpan.rs:413
+Feb 25 02:53:31.025 INFO valid UDP packet, loc: examples/sixlowpan.rs:416
+Feb 25 02:53:31.025 INFO UDP: destination port is our CoAP port, loc: examples/sixlowpan.rs:443
+Feb 25 02:53:31.025 INFO valid CoAP message, loc: examples/sixlowpan.rs:446
+Feb 25 02:53:31.025 INFO CoAP: PUT request, loc: examples/sixlowpan.rs:550
+Feb 25 02:53:31.025 INFO CoAP: PUT /led, loc: examples/sixlowpan.rs:556
+Feb 25 02:53:31.025 INFO CoAP: Changed, loc: examples/sixlowpan.rs:559
+Feb 25 02:53:31.025 INFO changing LED state, loc: examples/sixlowpan.rs:106
+Feb 25 02:53:31.025 INFO sending CoAP message, loc: examples/sixlowpan.rs:115
 ```

@@ -1,10 +1,16 @@
 //! LOWPAN_NHC encoding
 
+use core::fmt;
+
 use as_slice::{AsMutSlice, AsSlice};
 use byteorder::{ByteOrder, NetworkEndian as NE};
 use owning_slice::Truncate;
 
-use crate::{ipv6, traits::UncheckedIndex};
+use crate::{
+    coap::{self, Unset},
+    ipv6,
+    traits::UncheckedIndex,
+};
 
 /* Header format */
 const NHC: usize = 0;
@@ -323,6 +329,33 @@ where
 
         self.payload_mut()[..plen].copy_from_slice(payload);
         self.buffer.truncate(self.payload + plen as u8);
+    }
+
+    /// Fills the payload with a CoAP message
+    pub fn coap<F>(&mut self, token_length: u8, f: F)
+    where
+        F: FnOnce(coap::Message<&mut [u8], Unset>) -> coap::Message<&mut [u8]>,
+    {
+        let plen = {
+            let m = coap::Message::new(self.payload_mut(), token_length);
+            f(m).len()
+        };
+
+        self.buffer.truncate(self.payload + plen as u8);
+    }
+}
+
+impl<B> fmt::Debug for UdpPacket<B>
+where
+    B: AsSlice<Element = u8>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("nhc::UdpPacket")
+            .field("source", &self.get_source())
+            .field("destination", &self.get_destination())
+            .field("checksum", &self.get_checksum())
+            // .field("payload", &self.payload())
+            .finish()
     }
 }
 
