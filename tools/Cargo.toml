@@ -11,3 +11,4 @@ jnet = { path = ".." }
 url = "1.7.0"
 rand = "0.6.5"
 libc = "0.2.49"
+exitfailure = "0.5.1"

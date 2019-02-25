@@ -12,6 +12,7 @@ use std::{
 };
 
 use clap::{App, Arg};
+use exitfailure::ExitFailure;
 use failure::{bail, Error, ResultExt};
 use jnet::coap;
 use rand::{
@@ -25,7 +26,11 @@ const ACK_RANDOM_FACTOR: f64 = 1.5;
 const ACK_TIMEOUT: u16 = 2_000; // ms
 const MAX_RETRANSMIT: u8 = 4;
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), ExitFailure> {
+    run().map_err(|e| e.into())
+}
+
+fn run() -> Result<(), Error> {
     let matches = App::new("coap")
         .arg(
             Arg::with_name("port")
@@ -149,7 +154,7 @@ fn main() -> Result<(), Error> {
         let n = match client.recv(&mut rx_buf) {
             Ok(n) => n,
             Err(e) => {
-                if e.kind() == io::ErrorKind::TimedOut {
+                if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock {
                     // try again
                     timeout *= 2;
 
