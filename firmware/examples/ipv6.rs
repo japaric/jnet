@@ -112,7 +112,7 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
         info!("new packet");
 
-        match on_new_packet(
+        let eth = match on_new_packet(
             &State {
                 led: led.is_set_low(),
             },
@@ -133,10 +133,7 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
                 info!("sending CoAP message");
 
-                ethernet
-                    .transmit(eth.as_bytes())
-                    .map_err(|_| error!("Enc28j60::transmit failed"))
-                    .ok()?;
+                eth
             }
 
             Action::EchoReply(eth) => {
@@ -144,21 +141,15 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
                 led.toggle();
 
-                ethernet
-                    .transmit(eth.as_bytes())
-                    .map_err(|_| error!("Enc28j60::transmit failed"))
-                    .ok()?;
+                eth
             }
 
-            Action::Nop => {}
+            Action::Nop => continue,
 
             Action::SolicitedNeighborAdvertisement(eth) => {
                 info!("sending solicited Neighbor Advertisement");
 
-                ethernet
-                    .transmit(eth.as_bytes())
-                    .map_err(|_| error!("Enc28j60::transmit failed"))
-                    .ok()?;
+                eth
             }
 
             Action::UdpReply(eth) => {
@@ -166,11 +157,19 @@ fn run(mut ethernet: Ethernet, mut led: Led) -> Option<!> {
 
                 led.toggle();
 
-                ethernet
-                    .transmit(eth.as_bytes())
-                    .map_err(|_| error!("Enc28j60::transmit failed"))
-                    .ok()?;
+                eth
             }
+        };
+
+        let bytes = eth.as_bytes();
+
+        if bytes.len() <= usize::from(ethernet.mtu()) {
+            ethernet
+                .transmit(eth.as_bytes())
+                .map_err(|_| error!("Enc28j60::transmit failed"))
+                .ok()?;
+        } else {
+            error!("Ethernet frame exceeds MTU");
         }
     }
 }
