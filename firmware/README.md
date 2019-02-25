@@ -19,7 +19,7 @@ List of examples:
 
 - [`ipv4`](#ipv4), a simplified IPv4 over Ethernet stack.
 - [`ipv6`](#ipv6), a simplified IPv6 over Ethernet stack.
-- [`sixlowpan`](#sixlowpan), an IPv6 over 802.15.4 stack.
+- [`sixlowpan`](#sixlowpan), a simplified IPv6 over 802.15.4 stack.
 
 ## `ipv4`
 
@@ -405,8 +405,13 @@ Feb 24 22:55:37.487 INFO sending CoAP message, loc: examples/ipv6.rs:134
 
 ## `sixlowpan`
 
-A simple 6LoWPAN stack. This stack responds to "ping"s and echoes back UDP
-packets.
+A simplified 6LoWPAN stack. This stack responds to "ping"s, echoes back UDP
+packets and exposes an LED as a CoAP resource.
+
+### Caveats
+
+- The device will *not* send Neighbor Solicitations for IP addresses it doesn't
+  know about.
 
 ### Setup
 
