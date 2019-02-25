@@ -165,7 +165,7 @@ struct Payload {
     led: bool,
 }
 
-// IO-less / "pure" logic
+// IO-less / "pure" logic (NB logging does IO but it's easy to remove using `GLOBAL_LOGGER`)
 fn on_new_packet<'a>(
     state: &State,
     bytes: &'a mut [u8],
