@@ -12,7 +12,7 @@
 #![deny(rust_2018_compatibility)]
 #![deny(rust_2018_idioms)]
 #![deny(unsafe_code)]
-// #![deny(warnings)]
+#![deny(warnings)]
 #![feature(never_type)]
 #![feature(proc_macro_hygiene)]
 #![no_main]
@@ -23,25 +23,26 @@ extern crate panic_abort;
 // extern crate panic_semihosting; // alternative panic handler
 
 use blue_pill::{Led, Radio, CACHE_SIZE, EXTENDED_ADDRESS, PAN_ID};
-use owning_slice::OwningSliceTo;
-// use cast::usize;
 use cortex_m_rt::entry;
 use heapless::FnvIndexMap;
 use jnet::{
-    icmpv6,
+    coap, icmpv6,
     ieee802154::{self, SrcDest},
     ipv6,
     ipv6::NextHeader,
     sixlowpan::{iphc, nhc},
 };
+use owning_slice::OwningSliceTo;
 use stlog::{
     global_logger,
     spanned::{error, info, warning},
 };
 use stm32f103xx_hal::{prelude::*, stm32f103xx};
+use ujson::{uDeserialize, uSerialize};
 
 #[global_logger]
 static LOGGER: blue_pill::ItmLogger = blue_pill::ItmLogger;
+// static LOGGER: stlog::NullLogger = stlog::NullLogger; // alt: no logs
 
 fn our_nl_addr() -> ipv6::Addr {
     EXTENDED_ADDRESS.into_link_local_address()
@@ -92,7 +93,33 @@ fn run(mut radio: Radio, mut led: Led) -> Option<!> {
 
         info!("new packet");
 
-        match on_new_frame(rx.frame, &mut extra_buf, &mut cache) {
+        match on_new_frame(
+            &State {
+                led: led.is_set_low(),
+            },
+            rx.frame,
+            &mut extra_buf,
+            &mut cache,
+        ) {
+            Action::CoAP(change, mac) => {
+                if let Some(on) = change {
+                    info!("changing LED state");
+
+                    if on {
+                        led.set_low()
+                    } else {
+                        led.set_high()
+                    }
+                }
+
+                info!("sending CoAP message");
+
+                radio
+                    .transmit(mac.as_bytes())
+                    .map_err(|_| error!("Mrf24j40::transmit failed"))
+                    .ok()?;
+            }
+
             Action::EchoReply(mac) => {
                 info!("sending Echo Reply");
 
@@ -129,9 +156,18 @@ fn run(mut radio: Radio, mut led: Led) -> Option<!> {
     }
 }
 
-// IO-less / "pure" logic
-#[inline(never)]
+struct State {
+    led: bool,
+}
+
+#[derive(uDeserialize, uSerialize)]
+struct Payload {
+    led: bool,
+}
+
+// IO-less / "pure" logic (NB logging does IO but it's easy to remove using `GLOBAL_LOGGER`)
 fn on_new_frame<'a>(
+    state: &State,
     bytes: OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>,
     extra_buf: &'a mut [u8; BUF_SZ as usize],
     cache: &mut FnvIndexMap<ipv6::Addr, ieee802154::Addr, CACHE_SIZE>,
@@ -392,11 +428,42 @@ fn on_new_frame<'a>(
             return Action::Nop;
         };
 
-        if let Some(dest_addr) = cache.get(&src_nl_addr).cloned() {
-            // echo back the packet
-            let dest_port = udp.get_source();
-            let src_port = udp.get_destination();
+        let dest_addr = if let Some(addr) = cache.get(&src_nl_addr) {
+            *addr
+        } else {
+            error!("IP address not in the neighbor cache");
 
+            return Action::Nop;
+        };
+
+        let dest_port = udp.get_destination();
+        let src_port = udp.get_source();
+
+        if dest_port == coap::PORT {
+            info!("UDP: destination port is our CoAP port");
+
+            let coap = if let Ok(m) = coap::Message::parse(udp.payload()) {
+                info!("valid CoAP message");
+
+                m
+            } else {
+                warning!("invalid CoAP message; ignoring");
+
+                return Action::Nop;
+            };
+
+            if !coap.get_code().is_request()
+                || match coap.get_type() {
+                    coap::Type::Confirmable | coap::Type::NonConfirmable => false,
+                    _ => true,
+                }
+            {
+                warning!("CoAP message is not a valid request; ignoring");
+
+                return Action::Nop;
+            }
+
+            // prepare a response
             let pan_id = PAN_ID;
             let src_addr = EXTENDED_ADDRESS.into();
             let mut mac = ieee802154::Frame::data(
@@ -408,22 +475,129 @@ fn on_new_frame<'a>(
                 },
             );
 
-            mac.udp(our_nl_addr, src_port, src_nl_addr, dest_port, false, |u| {
+            let mut change = None;
+            mac.udp(our_nl_addr, dest_port, src_nl_addr, src_port, false, |u| {
+                u.coap(0, |resp| on_coap_request(state, coap, resp, &mut change))
+            });
+
+            return Action::CoAP(change, mac);
+        } else {
+            // echo back the packet
+            let pan_id = PAN_ID;
+            let src_addr = EXTENDED_ADDRESS.into();
+            let mut mac = ieee802154::Frame::data(
+                OwningSliceTo(extra_buf, BUF_SZ),
+                SrcDest::IntraPan {
+                    pan_id,
+                    src_addr,
+                    dest_addr,
+                },
+            );
+
+            mac.udp(our_nl_addr, dest_port, src_nl_addr, src_port, false, |u| {
                 u.set_payload(udp.payload())
             });
 
             return Action::UdpReply(mac);
-        } else {
-            error!("IP address not in the neighbor cache");
-
-            return Action::Nop;
         }
     }
 
     Action::Nop
 }
 
+fn on_coap_request<'a>(
+    state: &State,
+    req: coap::Message<&[u8]>,
+    mut resp: coap::Message<&'a mut [u8], coap::Unset>,
+    change: &mut Option<bool>,
+) -> coap::Message<&'a mut [u8]> {
+    let code = req.get_code();
+
+    resp.set_message_id(req.get_message_id());
+    resp.set_type(if req.get_type() == coap::Type::Confirmable {
+        coap::Type::Acknowledgement
+    } else {
+        coap::Type::NonConfirmable
+    });
+
+    if code == coap::Method::Get.into() {
+        info!("CoAP: GET request");
+
+        let mut opts = req.options();
+        while let Some(opt) = opts.next() {
+            if opt.number() == coap::OptionNumber::UriPath {
+                if opt.value() == b"led" && opts.next().is_none() {
+                    info!("CoAP: GET /led");
+
+                    let mut tmp = [0; 13];
+                    let payload =
+                        ujson::write(&Payload { led: state.led }, &mut tmp).expect("unreachable");
+
+                    resp.set_code(coap::Response::Content);
+                    return resp.set_payload(payload.as_bytes());
+                } else {
+                    // fall-through: Not Found
+                    break;
+                }
+            } else {
+                error!("CoAP: Bad Option");
+
+                resp.set_code(coap::Response::BadOption);
+                return resp.no_payload();
+            }
+        }
+    } else if code == coap::Method::Put.into() {
+        info!("CoAP: PUT request");
+
+        let mut opts = req.options();
+        while let Some(opt) = opts.next() {
+            if opt.number() == coap::OptionNumber::UriPath {
+                if opt.value() == b"led" && opts.next().is_none() {
+                    info!("CoAP: PUT /led");
+
+                    if let Ok(payload) = ujson::from_bytes::<Payload>(req.payload()) {
+                        info!("CoAP: Changed");
+
+                        *change = Some(payload.led);
+
+                        resp.set_code(coap::Response::Changed);
+                        return resp.no_payload();
+                    } else {
+                        error!("CoAP: Bad Request");
+
+                        resp.set_code(coap::Response::BadRequest);
+                        return resp.no_payload();
+                    }
+                } else {
+                    // fall-through: Not Found
+                    break;
+                }
+            } else {
+                error!("CoAP: Bad Option");
+
+                resp.set_code(coap::Response::BadOption);
+                return resp.no_payload();
+            }
+        }
+    } else {
+        info!("CoAP: Method Not Allowed");
+
+        resp.set_code(coap::Response::MethodNotAllowed);
+        return resp.no_payload();
+    }
+
+    error!("CoAP: Not Found");
+
+    resp.set_code(coap::Response::NotFound);
+    resp.no_payload()
+}
+
 enum Action<'a> {
+    CoAP(
+        Option<bool>,
+        ieee802154::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>,
+    ),
+
     EchoReply(ieee802154::Frame<OwningSliceTo<&'a mut [u8; BUF_SZ as usize], u8>>),
 
     Nop,
