@@ -8,7 +8,7 @@ use std::{
     io::{self, Write},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
     str,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use clap::{App, Arg};
@@ -24,6 +24,7 @@ use url::{Host, Url};
 /* Transmission parameters */
 const ACK_RANDOM_FACTOR: f64 = 1.5;
 const ACK_TIMEOUT: u16 = 2_000; // ms
+const DEFAULT_LEISURE: u8 = 5; // s
 const MAX_RETRANSMIT: u8 = 4;
 
 fn main() -> Result<(), ExitFailure> {
@@ -114,13 +115,17 @@ fn run() -> Result<(), Error> {
         _ => bail!(M),
     };
 
-    client.connect(server)?;
+    let is_multicast = server.ip().is_multicast();
 
     // construct outgoing message
     let mut buf = [0; 256];
     let mut mtx = coap::Message::new(&mut buf[..], 0);
     // FIXME multicast messages must be Non-Confirmable
-    mtx.set_type(coap::Type::Confirmable);
+    mtx.set_type(if is_multicast {
+        coap::Type::NonConfirmable
+    } else {
+        coap::Type::Confirmable
+    });
     let mid = rng.gen();
     mtx.set_code(method);
     mtx.set_message_id(mid);
@@ -136,55 +141,106 @@ fn run() -> Result<(), Error> {
             .unwrap_or(&[]),
     );
 
-    let stdout = io::stdout();
     let stderr = io::stderr();
-    let mut stdout = stdout.lock();
     let mut stderr = stderr.lock();
+    writeln!(stderr, "-> {:?}", mtx).ok();
+
+    let stdout = io::stdout();
+    let mut stdout = stdout.lock();
     let mut rx_buf = [0; 256];
-    let between = Uniform::new(1.0, ACK_RANDOM_FACTOR);
-    let mut timeout = Duration::from_millis((between.sample(&mut rng) * ACK_TIMEOUT as f64) as u64);
+    if is_multicast {
 
-    client.connect(server)?;
-    for _ in 0..MAX_RETRANSMIT {
-        writeln!(stderr, "-> {:?}", mtx).ok();
-        client.send(mtx.as_bytes()).unwrap();
+        client.send_to(mtx.as_bytes(), server).unwrap();
 
-        client.set_read_timeout(Some(timeout))?;
+        // we report all responses received during the leisure period
+        let end = Instant::now() + Duration::from_secs(u64::from(DEFAULT_LEISURE));
 
-        let n = match client.recv(&mut rx_buf) {
-            Ok(n) => n,
-            Err(e) => {
-                if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock {
-                    // try again
-                    timeout *= 2;
+        loop {
+            let now = Instant::now();
 
-                    continue;
-                } else {
-                    return Err(e.into());
-                }
-            }
-        };
+            let timeout = if now > end { return Ok(()) } else { end - now };
 
-        if let Ok(mrx) = coap::Message::parse(&rx_buf[..n]) {
-            if mrx.get_type() == coap::Type::Acknowledgement && mrx.get_message_id() == mid {
-                writeln!(stderr, "<- {:?}", mrx).ok();
-                let payload = mrx.payload();
-                if !payload.is_empty() {
-                    if let Ok(s) = str::from_utf8(payload) {
-                        writeln!(stdout, "{}", s).ok();
+            client.set_read_timeout(Some(timeout))?;
+
+            let (n, addr) = match client.recv_from(&mut rx_buf) {
+                Ok((n, addr)) => (n, addr),
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock
+                    {
+                        // leisure period is over
+                        return Ok(());
                     } else {
-                        writeln!(stdout, "{:?}", payload).ok();
+                        return Err(e.into());
                     }
                 }
+            };
 
-                return Ok(());
+            if let Ok(mrx) = coap::Message::parse(&rx_buf[..n]) {
+                if mrx.get_type() == coap::Type::NonConfirmable && mrx.get_message_id() == mid {
+                    writeln!(stderr, "<- {:?} (from {})", mrx, addr).ok();
+                    let payload = mrx.payload();
+                    if !payload.is_empty() {
+                        if let Ok(s) = str::from_utf8(payload) {
+                            writeln!(stdout, "{}", s).ok();
+                        } else {
+                            writeln!(stdout, "{:?}", payload).ok();
+                        }
+                    }
+                } else {
+                    bail!("received unrelated response");
+                }
             } else {
-                bail!("received unrelated response");
+                bail!("parsing incoming CoAP message")
             }
-        } else {
-            bail!("parsing incoming CoAP message")
         }
-    }
+    } else {
+        // if unicast, connect to the server
+        client.connect(server)?;
+        client.send(mtx.as_bytes()).unwrap();
 
-    bail!("timed out")
+        let between = Uniform::new(1.0, ACK_RANDOM_FACTOR);
+        let mut timeout =
+            Duration::from_millis((between.sample(&mut rng) * ACK_TIMEOUT as f64) as u64);
+
+        for _ in 0..MAX_RETRANSMIT {
+            client.set_read_timeout(Some(timeout))?;
+
+            let n = match client.recv(&mut rx_buf) {
+                Ok(n) => n,
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock
+                    {
+                        // try again
+                        timeout *= 2;
+
+                        continue;
+                    } else {
+                        return Err(e.into());
+                    }
+                }
+            };
+
+            if let Ok(mrx) = coap::Message::parse(&rx_buf[..n]) {
+                if mrx.get_type() == coap::Type::Acknowledgement && mrx.get_message_id() == mid {
+                    writeln!(stderr, "<- {:?}", mrx).ok();
+                    let payload = mrx.payload();
+                    if !payload.is_empty() {
+                        if let Ok(s) = str::from_utf8(payload) {
+                            writeln!(stdout, "{}", s).ok();
+                        } else {
+                            writeln!(stdout, "{:?}", payload).ok();
+                        }
+                    }
+
+                    return Ok(());
+                } else {
+                    bail!("received unrelated response");
+                }
+            } else {
+                bail!("parsing incoming CoAP message")
+            }
+        }
+
+        bail!("timed out")
+    }
 }
