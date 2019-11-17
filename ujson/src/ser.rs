@@ -1,6 +1,6 @@
 //! Serialization
 
-use core::{slice, str};
+use core::{mem::MaybeUninit, slice, str};
 
 use crate::traits::SliceExt;
 
@@ -36,6 +36,10 @@ impl Serialize for bool {
     }
 }
 
+unsafe fn uninitialized<T>() -> T {
+    MaybeUninit::uninit().assume_init()
+}
+
 macro_rules! unsigned {
     ($(($uN:ty, $N:expr),)+) => {
         $(
@@ -43,7 +47,7 @@ macro_rules! unsigned {
                 fn serialize(&self, cursor: &mut Cursor<'_>) -> Result<(), ()> {
                     let mut x = *self;
 
-                    let mut buf: [u8; $N] = unsafe { core::mem::uninitialized() };
+                    let mut buf: [u8; $N] = unsafe { uninitialized() };
                     let mut idx = $N - 1;
                     loop {
                         buf[idx] = b'0' + (x % 10) as u8;
@@ -78,7 +82,7 @@ macro_rules! signed {
                     let is_negative = *self < 0;
                     let mut x = self.wrapping_abs() as $uN;
 
-                    let mut buf: [u8; $N] = unsafe { core::mem::uninitialized() };
+                    let mut buf: [u8; $N] = unsafe { uninitialized() };
                     let mut idx = $N - 1;
                     loop {
                         buf[idx] = b'0' + (x % 10) as u8;
