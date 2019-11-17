@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["HEADER_SIZE","Size of the ICMP header"]],"enum":[["EchoReply","[Type State] The Echo Reply type"],["EchoRequest","[Type State] The Echo Request type"],["Type","ICMP types"]],"struct":[["Message","ICMP Message"]]});

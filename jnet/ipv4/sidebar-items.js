@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["MIN_HEADER_SIZE","Minimum size of the IPv4 header"]],"enum":[["Protocol","IP protocol"]],"struct":[["Addr","IPv4 address"],["Packet","IPv4 packet"]]});

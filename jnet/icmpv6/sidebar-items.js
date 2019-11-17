@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["HEADER_SIZE","Header size"]],"enum":[["NeighborAdvertisement","[Type state]"],["NeighborSolicitation","[Type state]"],["Type","ICMPv6 types"]],"struct":[["Message","ICMPv6 Message"]]});

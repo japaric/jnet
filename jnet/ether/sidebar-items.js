@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["HEADER_SIZE","Size of the MAC header"]],"enum":[["Type","Ether Type"]],"struct":[["Frame","Layer 2 Ethernet frame"]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Addr","Maybe IPHC compressed address"]],"struct":[["Context","IPHC encoding context"],["ElidedAddr","Fully elided IPv6 address"],["Packet","LOWPAN_IPHC compressed IPv6 packet"]]});

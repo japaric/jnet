@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["HEADER_SIZE","Size of the ARP header"]],"enum":[["Ethernet","[Type state] The Ethernet hardware type"],["HardwareType","Hardware type"],["Ipv4","[Type state] The IPv4 protocol type"],["Operation","ARP operation"]],"struct":[["Packet","ARP packet"]]});

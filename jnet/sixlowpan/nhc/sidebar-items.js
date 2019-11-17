@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["UdpPacket","LOWPAN_NHC compressed UDP packet"]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Addr","An address, either short or extended"],["AddrMode","Address mode"],["SrcDest","Source and destination address"],["Type","Frame type"]],"struct":[["ExtendedAddr","Extended (64-bit) address"],["Frame","IEEE 802.15.4 MAC frame"],["PanId","PAN identifier"],["ShortAddr","Short (16-bit) address"]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["HEADER_SIZE","Size of the UDP header"]],"struct":[["Packet","UDP packet"]]});

@@ -1,0 +1,15 @@
+var ALIASES = {};
+ALIASES["as_slice"] = {};
+ALIASES["byteorder"] = {};
+ALIASES["cast"] = {};
+ALIASES["generic_array"] = {};
+ALIASES["hash32"] = {};
+ALIASES["hash32_derive"] = {};
+ALIASES["jnet"] = {};
+ALIASES["owning_slice"] = {};
+ALIASES["proc_macro2"] = {};
+ALIASES["quote"] = {};
+ALIASES["stable_deref_trait"] = {};
+ALIASES["syn"] = {};
+ALIASES["typenum"] = {};
+ALIASES["unicode_xid"] = {};
